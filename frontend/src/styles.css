@@ -309,6 +309,12 @@ body {
   gap: 16px;
 }
 
+.summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
 .summary-top {
   display: flex;
   align-items: center;
