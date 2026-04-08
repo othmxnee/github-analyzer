@@ -15,6 +15,7 @@ from utils.metrics import (
     simulate_bus_factor_risk,
     generate_project_summary,
 )
+from utils.treemap import build_treemap_data
 
 
 _ANALYSIS_CACHE = {}
@@ -205,6 +206,7 @@ def compute_metrics(repo_path, df_commits, df_files):
     kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
     
     architecture_data = build_dependency_graph(repo_root)
+    treemap_data = build_treemap_data(df_files)
 
     in_degree_data = {
         node["id"]: node["degree"]
@@ -337,6 +339,7 @@ def compute_metrics(repo_path, df_commits, df_files):
         "ownership_table": ownership_rows,
         "ownership_plots": ownership_plots,
         "architecture": architecture_data,
+        "treemap": treemap_data,
         "busfactor_simulation": busfactor_simulation,
         "project_summary": project_summary,
     }
@@ -420,3 +423,8 @@ def get_project_summary_data(repo_url=None):
         "project_summary",
         {"health_score": 0, "risk_level": "Unknown", "insights": [], "recommendations": []},
     )
+
+
+def get_treemap_data(repo_url=None):
+    analysis = _resolve_analysis(repo_url)
+    return analysis.get("treemap", {"ids": [], "labels": [], "parents": [], "values": [], "paths": []})

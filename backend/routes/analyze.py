@@ -4,6 +4,7 @@ from services.analyzer import (
     get_architecture,
     get_busfactor_simulation,
     get_project_summary_data,
+    get_treemap_data,
 )
 
 analyze_bp = Blueprint('analyze', __name__)
@@ -67,5 +68,16 @@ def project_summary():
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid GitHub URL'}), 400
         return jsonify(get_project_summary_data(repo_url))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/treemap', methods=['GET'])
+def treemap():
+    try:
+        repo_url = request.args.get('repo_url')
+        if repo_url and not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid GitHub URL'}), 400
+        return jsonify(get_treemap_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
