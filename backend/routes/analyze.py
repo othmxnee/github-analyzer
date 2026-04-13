@@ -5,6 +5,7 @@ from services.analyzer import (
     get_busfactor_simulation,
     get_project_summary_data,
     get_treemap_data,
+    get_voronoi_data,
 )
 
 analyze_bp = Blueprint('analyze', __name__)
@@ -79,5 +80,16 @@ def treemap():
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid GitHub URL'}), 400
         return jsonify(get_treemap_data(repo_url))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/voronoi', methods=['GET'])
+def voronoi():
+    try:
+        repo_url = request.args.get('repo_url')
+        if repo_url and not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid GitHub URL'}), 400
+        return jsonify(get_voronoi_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500

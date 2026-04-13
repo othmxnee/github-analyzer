@@ -17,6 +17,7 @@ import ArchitectureGraph from '../components/Charts/ArchitectureGraph'
 import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisualization'
 import ProjectRiskSummary from '../components/Charts/ProjectRiskSummary'
 import RepositoryTreemap from '../components/Charts/RepositoryTreemap'
+import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
 import ThemeToggle from '../components/ThemeToggle'
 
 function Dashboard() {
@@ -60,6 +61,7 @@ function Dashboard() {
     ownership_plots = [],
     architecture = { nodes: [], edges: [] },
     treemap = { ids: [], labels: [], parents: [], values: [], paths: [] },
+    voronoi = { nodes: [], edges: [] },
     busfactor_simulation = { developers: [], simulation: [] },
     project_summary = { health_score: 0, risk_level: 'Unknown', insights: [], recommendations: [] }
   } = results
@@ -231,6 +233,10 @@ function Dashboard() {
 
         <Card title="Repository File Hotspots (Treemap)" icon="🗂️">
           <RepositoryTreemap data={treemap} />
+        </Card>
+
+        <Card title="Import-Coupled File Hotspots (Voronoi)" icon="🔷">
+          <VoronoiTreemap data={voronoi} />
         </Card>
 
         <Card title="Bus Factor Risk Simulation" icon="🧯">

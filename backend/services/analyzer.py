@@ -1,3 +1,4 @@
+import json
 import subprocess
 import tempfile
 import os
@@ -16,6 +17,7 @@ from utils.metrics import (
     generate_project_summary,
 )
 from utils.treemap import build_treemap_data
+from utils.voronoi_treemap import build_voronoi_data
 
 
 _ANALYSIS_CACHE = {}
@@ -204,9 +206,24 @@ def compute_metrics(repo_path, df_commits, df_files):
     inter_commit = compute_inter_commit_time(df_commits)
     
     kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
+    # TEMP DEBUG - before kci
+    import json
+    with open("/tmp/kci_debug_pre.json", "w") as f:
+        json.dump({"file_ids": list(df_files['file_id'].dropna().unique())[:10]}, f, indent=2)
+
+    kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
+
+# TEMP DEBUG - after kci  
+    with open("/tmp/kci_debug.json", "w") as f:
+        json.dump({
+        "kci_keys": list(kci_data.keys())[:10],
+        "file_ids": list(df_files['file_id'].dropna().unique())[:10]
+         }, f, indent=2)
+
     
     architecture_data = build_dependency_graph(repo_root)
     treemap_data = build_treemap_data(df_files)
+    voronoi_data = build_voronoi_data(df_files, architecture_data, kci_data)
 
     in_degree_data = {
         node["id"]: node["degree"]
@@ -340,6 +357,7 @@ def compute_metrics(repo_path, df_commits, df_files):
         "ownership_plots": ownership_plots,
         "architecture": architecture_data,
         "treemap": treemap_data,
+        "voronoi": voronoi_data,
         "busfactor_simulation": busfactor_simulation,
         "project_summary": project_summary,
     }
@@ -428,3 +446,8 @@ def get_project_summary_data(repo_url=None):
 def get_treemap_data(repo_url=None):
     analysis = _resolve_analysis(repo_url)
     return analysis.get("treemap", {"ids": [], "labels": [], "parents": [], "values": [], "paths": []})
+
+
+def get_voronoi_data(repo_url=None):
+    analysis = _resolve_analysis(repo_url)
+    return analysis.get("voronoi", {"nodes": [], "edges": []})
