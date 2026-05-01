@@ -18,29 +18,69 @@ import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisual
 import ProjectRiskSummary from '../components/Charts/ProjectRiskSummary'
 import RepositoryTreemap from '../components/Charts/RepositoryTreemap'
 import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
+import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
+import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
+import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
 import ThemeToggle from '../components/ThemeToggle'
 
 function Dashboard() {
-  const [results, setResults] = useState(null)
-  const [repoUrl, setRepoUrl] = useState('')
+  const [results, setResults]         = useState(null)
+  const [repoUrl, setRepoUrl]         = useState('')
+  const [skillsData, setSkillsData]   = useState(null)
+  const [skillsLoading, setSkillsLoading] = useState(false)
+  const [skillsError, setSkillsError] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     const stored = sessionStorage.getItem('analysisResults')
-    const url = sessionStorage.getItem('repoUrl')
-
-    if (!stored) {
-      navigate('/')
-      return
-    }
-
+    const url    = sessionStorage.getItem('repoUrl')
+    if (!stored) { navigate('/'); return }
     setResults(JSON.parse(stored))
     setRepoUrl(url || '')
   }, [navigate])
 
-  if (!results) {
-    return null
-  }
+  // Fetch skills data separately when repoUrl is ready
+  useEffect(() => {
+    if (!repoUrl) return
+
+    setSkillsLoading(true)
+    setSkillsError(null)
+
+    // Step 1: start background analysis
+    fetch('http://localhost:5000/analyze/skills', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ repo_url: repoUrl }),
+    })
+
+    // Step 2: poll every 5 seconds until done
+    const interval = setInterval(() => {
+      fetch(`http://localhost:5000/analyze/skills/result?repo_url=${encodeURIComponent(repoUrl)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'done') {
+            setSkillsData(data)
+            setSkillsLoading(false)
+            clearInterval(interval)
+          } else if (data.status === 'error') {
+            setSkillsError(data.error)
+            setSkillsLoading(false)
+            clearInterval(interval)
+          }
+          // if 'running' -> keep polling
+        })
+        .catch(err => {
+          setSkillsError(err.message)
+          setSkillsLoading(false)
+          clearInterval(interval)
+        })
+    }, 5000)
+
+    // Cleanup on unmount
+    return () => clearInterval(interval)
+  }, [repoUrl])
+
+  if (!results) return null
 
   const {
     summary = {},
@@ -66,6 +106,18 @@ function Dashboard() {
     project_summary = { health_score: 0, risk_level: 'Unknown', insights: [], recommendations: [] }
   } = results
 
+  const repoSlug = (() => {
+    try {
+      const parts = repoUrl.replace(/\.git$/, '').split('/')
+      return parts.slice(-2).join(' / ')
+    } catch {
+      return repoUrl
+    }
+  })()
+
+  const giniRisk = gini > 0.8 ? 'danger' : gini > 0.6 ? 'warning' : 'ok'
+  const busRisk  = bus_factor <= 2 ? 'danger' : bus_factor <= 4 ? 'warning' : 'ok'
+
   const Card = ({ title, children, icon }) => (
     <div className="card">
       <h2 className="card-title">
@@ -76,148 +128,112 @@ function Dashboard() {
     </div>
   )
 
-  const StatCard = ({ label, value, sublabel }) => (
-    <div className="stat-card">
+  const StatCard = ({ label, value, sublabel, risk }) => (
+    <div className={`stat-card${risk ? ` stat-card--${risk}` : ''}`}>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
-      {sublabel && <div className="stat-label">{sublabel}</div>}
+      {sublabel && <div className="stat-sublabel">{sublabel}</div>}
     </div>
   )
 
-  const escapeHtml = value =>
-    String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-
-  const handleDownloadSummaryPdf = () => {
-    if (typeof window === 'undefined') return
-
-    const summaryData = project_summary || {}
-    const popup = window.open('', '_blank', 'noopener,noreferrer,width=920,height=760')
-
-    if (!popup) {
-      window.alert('Please allow popups to export the summary as PDF.')
-      return
-    }
-
-    const riskLevel = escapeHtml(summaryData.risk_level || 'Unknown')
-    const score = Number.isFinite(summaryData.health_score) ? summaryData.health_score : 0
-    const insights = Array.isArray(summaryData.insights) ? summaryData.insights : []
-    const recommendations = Array.isArray(summaryData.recommendations) ? summaryData.recommendations : []
-
-    const insightsHtml = insights.length
-      ? `<ul>${insights.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
-      : '<p>No insights available.</p>'
-
-    const recommendationsHtml = recommendations.length
-      ? `<ul>${recommendations.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
-      : '<p>No recommendations available.</p>'
-
-    popup.document.write(`
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8" />
-          <title>Repository Risk Summary</title>
-          <style>
-            body { font-family: Arial, sans-serif; color: #111827; margin: 28px; line-height: 1.5; }
-            h1 { margin: 0 0 8px 0; }
-            h2 { margin: 22px 0 8px 0; font-size: 1.1rem; }
-            p { margin: 4px 0; }
-            .meta { color: #4b5563; margin-bottom: 14px; }
-            .score { font-size: 1.2rem; font-weight: 700; margin-top: 10px; }
-            ul { margin: 8px 0 0 20px; }
-            li { margin-bottom: 6px; }
-          </style>
-        </head>
-        <body>
-          <h1>Repository Risk Summary</h1>
-          <p class="meta"><strong>Repository:</strong> ${escapeHtml(repoUrl || 'N/A')}</p>
-          <p class="meta"><strong>Generated:</strong> ${escapeHtml(new Date().toLocaleString())}</p>
-          <p class="score">Health Score: ${escapeHtml(score)} / 100</p>
-          <p><strong>Risk Level:</strong> ${riskLevel}</p>
-          <h2>Insights</h2>
-          ${insightsHtml}
-          <h2>Recommendations</h2>
-          ${recommendationsHtml}
-        </body>
-      </html>
-    `)
-    popup.document.close()
-    popup.focus()
-    setTimeout(() => popup.print(), 300)
-  }
+  const SectionLabel = ({ icon, title, description }) => (
+    <div className="section-group-label">
+      <div className="section-group-label__left">
+        <span className="section-group-label__icon">{icon}</span>
+        <span className="section-group-label__title">{title}</span>
+      </div>
+      {description && <span className="section-group-label__desc">{description}</span>}
+    </div>
+  )
 
   return (
     <div className="page">
       <div className="container">
+
+        {/* ── Top bar ── */}
         <div className="top-bar">
-          <button
-            onClick={() => navigate('/')}
-            className="btn btn-ghost"
-          >
-            ← New Analysis
-          </button>
+          <button onClick={() => navigate('/')} className="btn btn-ghost">← New Analysis</button>
           <ThemeToggle />
         </div>
 
-        <h1 className="section-title" style={{ wordBreak: 'break-all' }}>{repoUrl}</h1>
+        {/* ── Repo header ── */}
+        <div className="repo-header">
+          <div className="repo-header__slug">{repoSlug}</div>
+          <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="repo-header__link"
+            title={repoUrl}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57
+                0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695
+                -.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99
+                .105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225
+                -.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405
+                c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225
+                0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3
+                0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            View on GitHub
+          </a>
+        </div>
+
+        {/* ════════════════════════════════════
+            GROUP 1 — Overview & Health
+        ════════════════════════════════════ */}
+        <SectionLabel icon="🩺" title="Project Health" description="High-level risk indicators at a glance" />
 
         <Card title="Overview" icon="📊">
           <div className="stat-grid">
-            <StatCard label="Total Commits" value={summary.total_commits} />
-            <StatCard label="Developers" value={summary.total_developers} />
-            <StatCard label="Files Analyzed" value={summary.total_files} />
-            <StatCard label="Modifications" value={summary.total_modifications} />
-            <StatCard label="Gini Coefficient" value={gini?.toFixed(3) || 'N/A'} sublabel="Inequality measure" />
-            <StatCard label="Bus Factor" value={bus_factor} sublabel="Developers for 50% of changes" />
+            <StatCard label="Total Commits"   value={summary.total_commits} />
+            <StatCard label="Developers"      value={summary.total_developers} />
+            <StatCard label="Files Analyzed"  value={summary.total_files} />
+            <StatCard label="Modifications"   value={summary.total_modifications} />
+            <StatCard
+              label="Gini Coefficient"
+              value={gini?.toFixed(3) || 'N/A'}
+              sublabel="Contribution inequality"
+              risk={giniRisk}
+            />
+            <StatCard
+              label="Bus Factor"
+              value={bus_factor}
+              sublabel="Devs covering 50% of changes"
+              risk={busRisk}
+            />
           </div>
         </Card>
+
+        <Card title="Repository Risk Summary" icon="🩺">
+          <ProjectRiskSummary data={project_summary} />
+        </Card>
+
+        {/* ════════════════════════════════════
+            GROUP 2 — Developer Activity
+        ════════════════════════════════════ */}
+        <SectionLabel icon="👥" title="Developer Activity" description="Who contributes, how often, and how consistently" />
 
         <div className="grid-2">
           <Card title="Top Developers by Commits" icon="👥">
             <TopDevelopersChart data={top_developers} />
           </Card>
-
           <Card title="Activity Timeline" icon="📈">
             <TimelineChart data={timeline} />
           </Card>
-
           <Card title="Contribution Inequality (Lorenz Curve)" icon="⚖️">
             <LorenzChart data={lorenz} gini={gini} />
           </Card>
-
           <Card title="Inter-Commit Time (Days)" icon="⏱️">
             <InterCommitTable data={inter_commit} />
           </Card>
         </div>
 
-        <div className="grid-3">
-          <Card title="Knowledge Concentration (KCI) - Top Files" icon="🔐">
-            <KCITable data={kci} />
-          </Card>
-
-          <Card title="Dependency In-Degree - Architectural Importance" icon="🏛️">
-            <InDegreeTable data={in_degree} />
-          </Card>
-
-          <Card title="Risk Analysis (KCI × In-Degree)" icon="⚠️">
-            <RiskTable data={risk_files} />
-          </Card>
-        </div>
-
-        <div className="grid-3">
+        <div className="grid-2">
           <Card title="Top Developers by File Modifications" icon="🧑‍💻">
             <TopDevModsChart data={top_devs_mods} />
           </Card>
-
-          <Card title="Top Modified Files (Hotspots)" icon="🔥">
-            <HotspotFilesChart data={hotspot_files} />
-          </Card>
-
           <Card title="Developer Activity Over Time" icon="📈">
             <CommitFrequencyChart data={commit_frequency} />
           </Card>
@@ -227,17 +243,22 @@ function Dashboard() {
           <ActivityHeatmap data={dev_file_matrix} />
         </Card>
 
-        <Card title="Architecture" icon="🕸️">
-          <ArchitectureGraph data={architecture} />
-        </Card>
+        {/* ════════════════════════════════════
+            GROUP 3 — Knowledge & Risk
+        ════════════════════════════════════ */}
+        <SectionLabel icon="⚠️" title="Knowledge & Risk" description="Ownership concentration, bus factor, and file-level risk" />
 
-        <Card title="Repository File Hotspots (Treemap)" icon="🗂️">
-          <RepositoryTreemap data={treemap} />
-        </Card>
-
-        <Card title="Import-Coupled File Hotspots (Voronoi)" icon="🔷">
-          <VoronoiTreemap data={voronoi} />
-        </Card>
+        <div className="grid-3">
+          <Card title="Knowledge Concentration (KCI)" icon="🔐">
+            <KCITable data={kci} />
+          </Card>
+          <Card title="Dependency In-Degree" icon="🏛️">
+            <InDegreeTable data={in_degree} />
+          </Card>
+          <Card title="Risk Analysis (KCI × In-Degree)" icon="⚠️">
+            <RiskTable data={risk_files} />
+          </Card>
+        </div>
 
         <Card title="Bus Factor Risk Simulation" icon="🧯">
           <BusFactorRiskVisualization data={busfactor_simulation} />
@@ -247,20 +268,89 @@ function Dashboard() {
           <Card title="Line Ownership Table" icon="📋">
             <OwnershipTable data={ownership_table} />
           </Card>
-
           <Card title="Line Ownership Plots" icon="📊">
             <OwnershipPlots data={ownership_plots} />
           </Card>
         </div>
 
-        <Card title="Repository Risk Summary" icon="🩺">
-          <div className="summary-actions">
-            <button className="btn btn-primary" onClick={handleDownloadSummaryPdf}>
-              Download PDF Summary
-            </button>
-          </div>
-          <ProjectRiskSummary data={project_summary} />
+        {/* ════════════════════════════════════
+            GROUP 4 — Architecture & Hotspots
+        ════════════════════════════════════ */}
+        <SectionLabel icon="🕸️" title="Architecture & Hotspots" description="Structural dependencies and high-churn files" />
+
+        <Card title="Architecture" icon="🕸️">
+          <ArchitectureGraph data={architecture} />
         </Card>
+
+        <div className="grid-2">
+          <Card title="Top Modified Files (Hotspots)" icon="🔥">
+            <HotspotFilesChart data={hotspot_files} />
+          </Card>
+          <Card title="Repository File Hotspots (Treemap)" icon="🗂️">
+            <RepositoryTreemap data={treemap} />
+          </Card>
+        </div>
+
+        <Card title="Import-Coupled File Hotspots (Voronoi)" icon="🔷">
+          <VoronoiTreemap data={voronoi} />
+        </Card>
+
+        {/* ════════════════════════════════════
+            GROUP 5 — Developer Skills & Roles  ← NEW
+        ════════════════════════════════════ */}
+        <SectionLabel
+          icon="🧠"
+          title="Developer Skills & Roles"
+          description="Automatically detected roles based on code contributions"
+        />
+
+        {skillsLoading && (
+          <Card title="Analyzing developer skills..." icon="🧠">
+            <p style={{ color: 'var(--color-text-muted)', padding: '20px 0' }}>
+              ⏳ Mining commit history to detect developer roles. This may take a few minutes...
+            </p>
+          </Card>
+        )}
+
+        {skillsError && (
+          <Card title="Skills Analysis" icon="🧠">
+            <p style={{ color: 'var(--color-danger)' }}>
+              Error: {skillsError}
+            </p>
+          </Card>
+        )}
+
+        {skillsData && !skillsLoading && (
+          <>
+            {/* Summary stat */}
+            <Card title="Skills Overview" icon="📊">
+              <div className="stat-grid">
+                <StatCard
+                  label="Developers Analyzed"
+                  value={skillsData.total_analyzed}
+                  sublabel="With 5+ commits"
+                />
+                {Object.entries(skillsData.role_distribution).map(([role, count]) => (
+                  <StatCard key={role} label={role} value={count} />
+                ))}
+              </div>
+            </Card>
+
+            <div className="grid-2">
+              <Card title="Role Distribution" icon="📊">
+                <RoleDistributionChart data={skillsData.role_distribution} />
+              </Card>
+              <Card title="Developer Skill Profile" icon="🎯">
+                <DeveloperRadarChart developers={skillsData.developers} />
+              </Card>
+            </div>
+
+            <Card title="Developer Skills Heatmap" icon="🌡️">
+              <SkillsHeatmap developers={skillsData.developers} />
+            </Card>
+          </>
+        )}
+
       </div>
     </div>
   )

@@ -1,12 +1,14 @@
 from flask import Blueprint, request, jsonify
 from services.analyzer import (
-    analyze_repo,
+    get_analysis_result,
     get_architecture,
     get_busfactor_simulation,
     get_project_summary_data,
     get_treemap_data,
     get_voronoi_data,
+    start_analysis,
 )
+from services.skill_service import analyze_skills, get_skills_result
 
 analyze_bp = Blueprint('analyze', __name__)
 
@@ -19,25 +21,26 @@ def _validate_github_url(repo_url):
 def analyze():
     try:
         data = request.get_json()
-        
         if not data or 'repo_url' not in data:
             return jsonify({'error': 'repo_url is required'}), 400
-        
         repo_url = data['repo_url']
-        
         if not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid GitHub URL'}), 400
-        
-        results = analyze_repo(repo_url)
-        
-        return jsonify(results)
-        
+
+        return jsonify(start_analysis(repo_url))
     except Exception as e:
-        import traceback
-        error_msg = str(e)
-        if not error_msg or error_msg == 'developer_id':
-            error_msg = f"Analysis failed: {type(e).__name__}. Please check the repository URL and try again."
-        return jsonify({'error': error_msg}), 500
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/analyze/result', methods=['GET'])
+def analyze_result():
+    try:
+        repo_url = request.args.get('repo_url')
+        if not repo_url or not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid GitHub URL'}), 400
+        return jsonify(get_analysis_result(repo_url))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @analyze_bp.route('/architecture', methods=['GET'])
@@ -91,5 +94,31 @@ def voronoi():
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid GitHub URL'}), 400
         return jsonify(get_voronoi_data(repo_url))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/analyze/skills', methods=['POST'])
+def skills():
+    try:
+        data = request.get_json()
+        if not data or 'repo_url' not in data:
+            return jsonify({'error': 'repo_url is required'}), 400
+        repo_url = data['repo_url']
+        if not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid GitHub URL'}), 400
+        result = analyze_skills(repo_url)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/analyze/skills/result', methods=['GET'])
+def skills_result():
+    try:
+        repo_url = request.args.get('repo_url')
+        if not repo_url or not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid GitHub URL'}), 400
+        return jsonify(get_skills_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500

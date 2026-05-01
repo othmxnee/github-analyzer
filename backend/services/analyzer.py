@@ -1,9 +1,12 @@
-import json
+import os
+import shutil
 import subprocess
 import tempfile
-import os
-import pandas as pd
+import threading
+import traceback
 from pathlib import Path
+
+import pandas as pd
 from pydriller import Repository
 from utils.metrics import (
     compute_gini,
@@ -21,6 +24,7 @@ from utils.voronoi_treemap import build_voronoi_data
 
 
 _ANALYSIS_CACHE = {}
+_ANALYSIS_STATUS = {}
 _LAST_REPO_URL = None
 
 
@@ -44,9 +48,55 @@ def analyze_repo(repo_url: str):
         return results
         
     finally:
-        import shutil
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
+
+
+def _run_analysis(repo_url: str):
+    global _LAST_REPO_URL
+
+    try:
+        _ANALYSIS_STATUS[repo_url] = 'running'
+        results = analyze_repo(repo_url)
+        _ANALYSIS_CACHE[repo_url] = results
+        _LAST_REPO_URL = repo_url
+        _ANALYSIS_STATUS[repo_url] = 'done'
+    except Exception as exc:
+        _ANALYSIS_STATUS[repo_url] = 'error'
+        _ANALYSIS_CACHE[repo_url] = {
+            'error': str(exc),
+            'trace': traceback.format_exc(),
+        }
+
+
+def start_analysis(repo_url: str):
+    status = _ANALYSIS_STATUS.get(repo_url)
+
+    if status == 'done':
+        return {'status': 'done'}
+
+    if status != 'running':
+        thread = threading.Thread(target=_run_analysis, args=(repo_url,), daemon=True)
+        thread.start()
+
+    return {'status': _ANALYSIS_STATUS.get(repo_url, 'running')}
+
+
+def get_analysis_result(repo_url: str):
+    status = _ANALYSIS_STATUS.get(repo_url, 'not_started')
+
+    if status == 'done':
+        return {'status': 'done', **_ANALYSIS_CACHE[repo_url]}
+
+    if status == 'error':
+        cached = _ANALYSIS_CACHE.get(repo_url, {})
+        return {
+            'status': 'error',
+            'error': cached.get('error', 'Unknown error'),
+            'trace': cached.get('trace'),
+        }
+
+    return {'status': status}
 
 
 def extract_data(repo_path: str):
@@ -206,25 +256,10 @@ def compute_metrics(repo_path, df_commits, df_files):
     inter_commit = compute_inter_commit_time(df_commits)
     
     kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
-    # TEMP DEBUG - before kci
-    import json
-    with open("/tmp/kci_debug_pre.json", "w") as f:
-        json.dump({"file_ids": list(df_files['file_id'].dropna().unique())[:10]}, f, indent=2)
-
-    kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
-
-# TEMP DEBUG - after kci  
-    with open("/tmp/kci_debug.json", "w") as f:
-        json.dump({
-        "kci_keys": list(kci_data.keys())[:10],
-        "file_ids": list(df_files['file_id'].dropna().unique())[:10]
-         }, f, indent=2)
-
     
     architecture_data = build_dependency_graph(repo_root)
     treemap_data = build_treemap_data(df_files)
-    voronoi_data = build_voronoi_data(df_files, architecture_data, kci_data)
-
+    voronoi_data = build_voronoi_data(df_files, architecture_data, kci_data, ownership_results, repo_root)
     in_degree_data = {
         node["id"]: node["degree"]
         for node in architecture_data.get("nodes", [])

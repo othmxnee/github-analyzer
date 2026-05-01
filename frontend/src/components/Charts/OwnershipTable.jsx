@@ -1,6 +1,6 @@
 function OwnershipTable({ data }) {
   if (!data || data.length === 0) {
-    return <p style={{ color: '#9ca3af' }}>No ownership data available</p>
+    return <p style={{ color: 'var(--text)' }}>No ownership data available</p>
   }
 
   const rows = data
@@ -19,9 +19,9 @@ function OwnershipTable({ data }) {
         </colgroup>
         <thead>
           <tr>
-            <th style={{ color: '#9ca3af', textAlign: 'left', padding: '8px' }}>File</th>
-            <th style={{ color: '#9ca3af', textAlign: 'left', padding: '8px' }}>Developer</th>
-            <th style={{ color: '#9ca3af', textAlign: 'right', padding: '8px' }}>Ownership</th>
+            <th style={{ color: 'var(--text)', textAlign: 'left', padding: '8px' }}>File</th>
+            <th style={{ color: 'var(--text)', textAlign: 'left', padding: '8px' }}>Developer</th>
+            <th style={{ color: 'var(--text)', textAlign: 'right', padding: '8px' }}>Ownership</th>
           </tr>
         </thead>
       </table>
@@ -35,13 +35,13 @@ function OwnershipTable({ data }) {
           <tbody>
             {rows.map((row, idx) => (
               <tr key={`${row.file}-${row.developer}-${idx}`}>
-                <td style={{ color: '#e5e7eb', padding: '6px', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <td style={{ color: 'var(--text)', padding: '6px', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {row.file}
                 </td>
-                <td style={{ color: '#e5e7eb', padding: '6px', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <td style={{ color: 'var(--text)', padding: '6px', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {row.developer}
                 </td>
-                <td style={{ color: '#93c5fd', padding: '6px', fontSize: '0.8rem', textAlign: 'right' }}>
+                <td style={{ color: 'var(--text)', padding: '6px', fontSize: '0.8rem', textAlign: 'right' }}>
                   {(row.ownership * 100).toFixed(1)}%
                 </td>
               </tr>
@@ -52,7 +52,7 @@ function OwnershipTable({ data }) {
       <p style={{
         marginTop: '12px',
         fontSize: '0.8rem',
-        color: '#6b7280',
+        color: 'var(--text)',
         fontStyle: 'italic'
       }}>
         Showing 50 rows at a time (scroll to see more). Top 5 owners per file.

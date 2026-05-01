@@ -53,11 +53,25 @@ def compute_kci(df_files, repo_root):
     ownership_results = {}
     
     for file_id in file_ids:
+        # Try the direct path first, then common variants
         abs_path = repo_root / file_id
-        
         if not abs_path.exists():
-            continue
-        
+            # Try stripping leading src/
+            stripped = str(file_id).lstrip("./")
+            if stripped.startswith("src/"):
+                stripped = stripped[4:]
+            abs_path = repo_root / stripped
+            if not abs_path.exists():
+                continue
+            file_id = stripped  # use the working path as key
+
+        # Normalize the key so it always matches voronoi/treemap paths
+        norm_key = str(file_id).replace("\\", "/").strip().lstrip("./").strip("/")
+        while "//" in norm_key:
+            norm_key = norm_key.replace("//", "/")
+        if norm_key.startswith("src/"):
+            norm_key = norm_key[4:]
+
         try:
             output = subprocess.check_output(
                 ["git", "-C", str(repo_root), "blame", "--line-porcelain", str(abs_path)],
@@ -76,25 +90,24 @@ def compute_kci(df_files, repo_root):
                         dev_lines[author] += 1
             
             total_lines = sum(dev_lines.values())
-            line_counts[str(file_id)] = total_lines
+            line_counts[norm_key] = total_lines
             
             if total_lines == 0:
                 continue
             
             ownership = {dev: lines / total_lines for dev, lines in dev_lines.items()}
-            ownership_results[str(file_id)] = ownership
+            ownership_results[norm_key] = ownership
             
         except subprocess.CalledProcessError:
             continue
     
     kci = {}
-    for file_id, owners in ownership_results.items():
+    for norm_key, owners in ownership_results.items():
         if len(owners) == 0:
             continue
-        kci[file_id] = max(owners.values())
+        kci[norm_key] = max(owners.values())
     
     return kci, line_counts, ownership_results
-
 
 def compute_in_degree(repo_root):
     python_files = list(repo_root.rglob("*.py"))
@@ -440,96 +453,101 @@ def simulate_bus_factor_risk(ownership_results, line_counts):
 
     return {"developers": developers, "simulation": simulation}
 
+def _bus_score(bus_factor):
+    if bus_factor >= 7: return 100
+    if bus_factor >= 5: return 80
+    if bus_factor >= 3: return 55
+    if bus_factor == 2: return 25
+    return 0  # 1 or less
+
+
+def _gini_score(gini):
+    if gini <= 0.30: return 100
+    if gini <= 0.50: return 75
+    if gini <= 0.65: return 50
+    if gini <= 0.80: return 25
+    return 0  # above 0.80
+
+
+def _kci_indegree_score(risk_scores):
+    # risk_scores already contains kci × normalized_indegree per file
+    if not risk_scores:
+        return 100
+    avg = sum(risk_scores.values()) / len(risk_scores)
+    if avg <= 0.10: return 100
+    if avg <= 0.25: return 75
+    if avg <= 0.45: return 50
+    if avg <= 0.65: return 25
+    return 0
+
 
 def generate_project_summary(metrics):
-    gini = float(metrics.get("gini", 0.0))
-    bus_factor = int(metrics.get("bus_factor", 0))
-    kci_data = metrics.get("kci_data", {})
-    risk_scores = metrics.get("risk_scores", {})
-    hotspots = metrics.get("hotspots", [])
-    architecture = metrics.get("architecture", {})
+    gini        = float(metrics.get("gini", 0.0))
+    bus_factor  = int(metrics.get("bus_factor", 0))
+    risk_scores = metrics.get("risk_scores", {})  # this is kci × in_degree from compute_risk_score()
 
-    score = 100
+    bus_s  = _bus_score(bus_factor)
+    gini_s = _gini_score(gini)
+    kci_s  = _kci_indegree_score(risk_scores)
+
+    health_score = round(bus_s * 0.40 + gini_s * 0.35 + kci_s * 0.25)
+
+    if health_score >= 80:   risk_level = "Low"
+    elif health_score >= 60: risk_level = "Moderate"
+    elif health_score >= 40: risk_level = "High"
+    else:                    risk_level = "Critical"
+
+    # --- Insights ---
     insights = []
-    recommendations = []
 
-    if gini > 0.8:
-        score -= 25
-        insights.append(f"Contribution inequality is high (Gini = {gini:.2f}).")
-        recommendations.append("Increase contributor diversity across active modules.")
-    elif gini >= 0.6:
-        score -= 12
-        insights.append(f"Contribution inequality is moderate (Gini = {gini:.2f}).")
-    else:
-        insights.append(f"Contribution distribution is balanced (Gini = {gini:.2f}).")
-
-    if bus_factor <= 2:
-        score -= 25
-        insights.append(f"Bus factor is low ({bus_factor}), indicating high continuity risk.")
-        recommendations.append("Prioritize knowledge transfer for core maintainers.")
-    elif bus_factor <= 5:
-        score -= 12
+    if bus_factor <= 1:
+        insights.append(f"Bus factor is critically low ({bus_factor}) — one person leaving could stall the project.")
+    elif bus_factor <= 2:
+        insights.append(f"Bus factor is low ({bus_factor}), posing a real continuity risk.")
+    elif bus_factor <= 4:
         insights.append(f"Bus factor is moderate ({bus_factor}).")
     else:
         insights.append(f"Bus factor is healthy ({bus_factor}).")
 
-    concentrated_files = [file_id for file_id, value in kci_data.items() if value > 0.8]
-    if len(concentrated_files) >= 10:
-        score -= 18
-    elif len(concentrated_files) >= 4:
-        score -= 10
-    elif len(concentrated_files) > 0:
-        score -= 4
-
-    if concentrated_files:
-        insights.append(
-            f"Knowledge concentration detected in {len(concentrated_files)} files (KCI > 0.8)."
-        )
-        recommendations.append("Expand code ownership for highly concentrated files.")
-
-    high_risk_files = [file_id for file_id, value in risk_scores.items() if value > 0.6]
-    if len(high_risk_files) >= 5:
-        score -= 14
-    elif len(high_risk_files) > 0:
-        score -= 8
-
-    if high_risk_files:
-        insights.append(
-            f"{len(high_risk_files)} files show elevated combined architectural/ownership risk."
-        )
-        recommendations.append("Review and split responsibility on high-risk files.")
-
-    top_arch_files = sorted(
-        architecture.get("nodes", []),
-        key=lambda node: node.get("pagerank", 0.0),
-        reverse=True,
-    )[:3]
-    if top_arch_files:
-        top_names = ", ".join(node.get("id", "") for node in top_arch_files)
-        insights.append(f"Critical architectural files include {top_names}.")
-        recommendations.append("Document critical architecture and add backup maintainers.")
-
-    if hotspots:
-        top_hotspots = ", ".join(file_id for file_id, _ in hotspots[:3])
-        insights.append(f"Top modification hotspots include {top_hotspots}.")
-        recommendations.append("Review hotspot files for refactoring opportunities.")
-
-    score = max(0, min(100, int(round(score))))
-    if score >= 80:
-        risk_level = "Low"
-    elif score >= 60:
-        risk_level = "Moderate"
+    if gini > 0.80:
+        insights.append(f"Contribution inequality is very high (Gini = {gini:.2f}) — a few developers do almost everything.")
+    elif gini > 0.65:
+        insights.append(f"Contribution inequality is high (Gini = {gini:.2f}).")
+    elif gini > 0.50:
+        insights.append(f"Contribution inequality is moderate (Gini = {gini:.2f}).")
     else:
-        risk_level = "High"
+        insights.append(f"Contributions are well distributed (Gini = {gini:.2f}).")
 
-    # Preserve order while removing duplicates
-    unique_recommendations = list(dict.fromkeys(recommendations))
-    if not unique_recommendations:
-        unique_recommendations = ["Continue monitoring ownership and architectural concentration over time."]
+    if risk_scores:
+        avg_kci = sum(risk_scores.values()) / len(risk_scores)
+        top_files = list(risk_scores.keys())[:3]
+        if avg_kci > 0.45:
+            insights.append(f"High knowledge concentration on critical files (avg KCI×InDegree = {avg_kci:.2f}). Top files: {', '.join(top_files)}.")
+        elif avg_kci > 0.10:
+            insights.append(f"Moderate knowledge concentration on critical files (avg = {avg_kci:.2f}). Top files: {', '.join(top_files)}.")
+        else:
+            insights.append("Knowledge is well spread across architecturally important files.")
+
+    # --- Recommendations ---
+    recommendations = []
+    if bus_factor <= 2:
+        recommendations.append("Cross-train developers on core modules to raise the bus factor.")
+    if gini > 0.65:
+        recommendations.append("Encourage more developers to contribute to active modules to reduce inequality.")
+    if kci_s <= 50 and risk_scores:
+        top_files = list(risk_scores.keys())[:3]
+        recommendations.append(f"Spread knowledge on high-risk files: {', '.join(top_files)}.")
+    if not recommendations:
+        recommendations.append("Repository looks healthy. Keep monitoring metrics as the project evolves.")
 
     return {
-        "health_score": score,
-        "risk_level": risk_level,
-        "insights": insights,
-        "recommendations": unique_recommendations,
+        "health_score": health_score,
+        "risk_level":   risk_level,
+        "insights":     insights,
+        "recommendations": recommendations,
+        "dimensions": {
+            "Bus Factor":       bus_s,
+            "Gini Coefficient": gini_s,
+            "KCI × In-Degree":  kci_s,
+        }
     }
