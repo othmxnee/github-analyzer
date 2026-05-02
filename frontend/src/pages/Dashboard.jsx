@@ -21,6 +21,7 @@ import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
 import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
 import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
 import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
+import DeveloperScatterPlot from '../components/Charts/DeveloperScatterPlot'
 import ThemeToggle from '../components/ThemeToggle'
 
 function Dashboard() {
@@ -344,6 +345,10 @@ function Dashboard() {
                 <DeveloperRadarChart developers={skillsData.developers} />
               </Card>
             </div>
+
+            <Card title="Developer Map — Skill Similarity (PCA)" icon="🗺️">
+              <DeveloperScatterPlot developers={skillsData.developers} />
+            </Card>
 
             <Card title="Developer Skills Heatmap" icon="🌡️">
               <SkillsHeatmap developers={skillsData.developers} />
