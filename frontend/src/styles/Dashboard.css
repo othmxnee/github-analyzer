@@ -1,0 +1,599 @@
+/* ════════════════════════════════════════
+   DASHBOARD — Terminal Noir Sidebar Layout
+════════════════════════════════════════ */
+
+/* ── Fixed top bar ── */
+.dash-topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  background: rgba(7,9,15,0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--b);
+  transition: background .3s;
+}
+body.lm .dash-topbar { background: rgba(239,241,247,0.94); }
+
+.dash-topbar-logo {
+  width: 224px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  height: 100%;
+  border-right: 1px solid var(--b);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: var(--t);
+  font-family: var(--f);
+}
+.dash-topbar-logo .dot { color: var(--ac); }
+
+.dash-topbar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dash-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--t3);
+  padding: 5px 10px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--surf);
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--f);
+  transition: border-color .2s, color .2s;
+}
+.dash-back-btn:hover { border-color: var(--bs); color: var(--t2); }
+.dash-back-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+.dash-divider {
+  width: 1px; height: 16px;
+  background: var(--b); flex-shrink: 0;
+}
+
+.dash-repo-name {
+  font-size: 13px; font-weight: 600;
+  color: var(--t); font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+.dash-repo-badge {
+  font-size: 9px; padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--green-d);
+  border: 1px solid rgba(0,200,150,0.25);
+  color: var(--green);
+  font-weight: 700; letter-spacing: .06em;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.dash-topbar-right {
+  display: flex; align-items: center;
+  gap: 8px; padding: 0 16px; flex-shrink: 0;
+}
+
+.dash-gh-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--t2);
+  padding: 6px 12px;
+  border: 1px solid var(--b); border-radius: 6px;
+  background: var(--surf); cursor: pointer;
+  text-decoration: none; font-family: var(--f);
+  transition: border-color .2s, color .2s;
+}
+.dash-gh-btn:hover { border-color: var(--bs); color: var(--t); }
+.dash-gh-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+.dash-pdf-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #fff; font-weight: 600;
+  padding: 6px 14px; border: none; border-radius: 6px;
+  background: var(--ac); cursor: pointer;
+  font-family: var(--f); transition: opacity .2s;
+  white-space: nowrap;
+}
+.dash-pdf-btn:hover { opacity: .85; }
+.dash-pdf-btn svg { width: 12px; height: 12px; }
+
+.dash-mode-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--t2);
+  padding: 5px 10px;
+  border: 1px solid var(--b); border-radius: 20px;
+  background: var(--surf); cursor: pointer;
+  font-family: var(--f); transition: border-color .2s, color .2s;
+}
+.dash-mode-btn:hover { border-color: var(--bs); color: var(--t); }
+.dash-mode-btn svg { width: 12px; height: 12px; }
+
+/* ── Shell below topbar ── */
+.dash-shell {
+  display: flex;
+  margin-top: 52px;
+  height: calc(100vh - 52px);
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.dash-sidebar {
+  width: 224px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--b);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px 0 24px;
+}
+.dash-sidebar::-webkit-scrollbar { display: none; }
+
+.dash-health-widget {
+  margin: 0 12px 4px;
+  padding: 14px;
+  background: var(--bg3);
+  border: 1px solid var(--b);
+  border-radius: 12px;
+}
+.dash-hw-label {
+  font-size: 9px; color: var(--t3);
+  text-transform: uppercase; letter-spacing: .1em;
+  font-weight: 700; margin-bottom: 8px;
+  font-family: var(--f);
+}
+.dash-hw-score {
+  display: flex; align-items: baseline;
+  gap: 4px; margin-bottom: 8px;
+}
+.dash-hw-num {
+  font-size: 26px; font-weight: 700;
+  letter-spacing: -.03em; line-height: 1;
+  font-family: var(--mono);
+}
+.dash-hw-num.red   { color: var(--red); }
+.dash-hw-num.amber { color: var(--amber); }
+.dash-hw-num.green { color: var(--green); }
+.dash-hw-denom { font-size: 11px; color: var(--t3); }
+
+.dash-hw-bar {
+  height: 3px; background: var(--b);
+  border-radius: 2px; overflow: hidden;
+}
+.dash-hw-fill {
+  height: 100%; border-radius: 2px;
+  transition: width .6s ease;
+}
+.dash-hw-fill.red   { background: var(--red); }
+.dash-hw-fill.amber { background: var(--amber); }
+.dash-hw-fill.green { background: var(--green); }
+
+.dash-nav-label {
+  font-size: 9px; color: var(--t3);
+  text-transform: uppercase; letter-spacing: .12em;
+  font-weight: 700; padding: 0 16px;
+  margin: 20px 0 6px; font-family: var(--f);
+}
+
+.dash-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; cursor: pointer;
+  font-size: 12px; color: var(--t2);
+  border-left: 2px solid transparent;
+  transition: color .15s, background .15s, border-color .15s;
+  user-select: none; font-family: var(--f);
+}
+.dash-nav-item:hover { color: var(--t); background: var(--surf); }
+.dash-nav-item.active {
+  color: var(--t);
+  background: var(--ac-d);
+  border-left-color: var(--ac);
+}
+.dash-nav-item svg {
+  width: 14px; height: 14px;
+  flex-shrink: 0; opacity: .65;
+  transition: opacity .15s;
+}
+.dash-nav-item.active svg { opacity: 1; color: var(--ac); }
+.dash-nav-item:hover svg  { opacity: .9; }
+
+.dash-nav-badge {
+  margin-left: auto;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+  font-family: var(--f);
+}
+.dash-nav-badge.red   { background: var(--red-d);   color: var(--red); }
+.dash-nav-badge.amber { background: var(--amber-d); color: var(--amber); }
+.dash-nav-badge.green { background: var(--green-d); color: var(--green); }
+
+.dash-nav-meta {
+  padding: 6px 16px;
+  font-size: 10px; color: var(--t3);
+  font-family: var(--mono);
+  display: flex; align-items: center; gap: 8px;
+}
+.dash-nav-meta svg { width: 12px; height: 12px; opacity: .4; flex-shrink: 0; }
+
+/* ── Main content area ── */
+.dash-main {
+  flex: 1; overflow-y: auto;
+  background: var(--bg);
+  padding: 28px 32px 64px;
+}
+.dash-main::-webkit-scrollbar { width: 4px; }
+.dash-main::-webkit-scrollbar-track { background: transparent; }
+.dash-main::-webkit-scrollbar-thumb { background: var(--b); border-radius: 2px; }
+
+/* ── Section headers ── */
+.dash-section-head {
+  display: flex; align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.dash-s-eyebrow {
+  font-size: 10px; color: var(--ac);
+  text-transform: uppercase; letter-spacing: .14em;
+  font-weight: 700; margin-bottom: 5px;
+  font-family: var(--f);
+}
+.dash-s-title {
+  font-size: 20px; font-weight: 700;
+  color: var(--t); letter-spacing: -.02em; line-height: 1.2;
+  font-family: var(--f);
+}
+.dash-s-sub {
+  font-size: 12px; color: var(--t2);
+  margin-top: 4px; line-height: 1.5;
+  font-family: var(--f);
+}
+
+/* ── Loading spinner ── */
+.dash-loading-card {
+  background: var(--bg2); border: 1px solid var(--b);
+  border-radius: 12px; padding: 32px;
+  display: flex; align-items: center; gap: 14px;
+  color: var(--t2); font-size: 13px; font-family: var(--f);
+}
+.dash-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--b);
+  border-top-color: var(--ac);
+  border-radius: 50%;
+  animation: dashSpin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes dashSpin { to { transform: rotate(360deg); } }
+
+/* ── Stat cards ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--b);
+  border-radius: 12px; padding: 16px 18px;
+  transition: border-color .2s;
+}
+.stat-card:hover { border-color: var(--bs); }
+.stat-card--danger  { background: var(--red-d);   border-color: var(--risk-danger-border); }
+.stat-card--warning { background: var(--amber-d); border-color: var(--risk-warning-border); }
+.stat-card--danger  .stat-value { color: var(--red) !important; }
+.stat-card--warning .stat-value { color: var(--amber) !important; }
+
+.stat-label {
+  font-size: 9px; color: var(--t3);
+  text-transform: uppercase; letter-spacing: .1em;
+  font-weight: 700; margin-bottom: 8px;
+  font-family: var(--f);
+}
+.stat-value {
+  font-size: 22px; font-weight: 700;
+  color: var(--t); letter-spacing: -.02em; line-height: 1.1;
+  font-family: var(--mono);
+}
+.stat-sublabel {
+  font-size: 10px; color: var(--t2); margin-top: 4px;
+  font-family: var(--f);
+}
+
+/* ── Chart cards ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--b);
+  border-radius: 12px; overflow: hidden;
+  transition: border-color .2s;
+  animation: dashFadeUp .4s ease both;
+}
+.card:hover { border-color: var(--bs); }
+
+.card-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 600; color: var(--t);
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--b);
+  margin: 0; font-family: var(--f);
+  /* hide emoji span from old Dashboard */
+}
+.card-title > span:first-child:not([style]) { display: none; }
+
+.card > div { padding: 18px; }
+
+/* ── Grid layouts ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 12px;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ── Section group label (hidden — nav replaces it) ── */
+.section-group-label { display: none; }
+
+/* ── Badges ── */
+.badge-risk-low      { background: var(--green-d); color: var(--green); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-risk-moderate { background: var(--amber-d); color: var(--amber); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-risk-high,
+.badge-risk-critical { background: var(--red-d);   color: var(--red);   padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+
+/* ── Project summary ── */
+.project-summary { display: grid; gap: 16px; }
+.summary-actions { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.summary-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.summary-score { display: flex; align-items: baseline; gap: 4px; }
+.summary-score-value { font-size: 2.2rem; font-weight: 700; color: var(--t); font-family: var(--mono); }
+.summary-score-denom { color: var(--t2); }
+.summary-meta { display: grid; gap: 8px; }
+.summary-title { color: var(--t); font-weight: 600; }
+.summary-block h3 { margin: 0 0 8px; font-size: 1rem; color: var(--t); }
+.summary-block ul { margin: 0; padding-left: 18px; color: var(--t2); }
+.summary-block li + li { margin-top: 6px; }
+
+.architecture-hint { margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; color: var(--t2); font-size: .85rem; }
+.busfactor-section { display: flex; flex-direction: column; gap: 14px; }
+.busfactor-insight { margin: 0; color: var(--t); }
+.risk-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--t2); font-size: .85rem; }
+.risk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.risk-legend i { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+
+/* ── Animations ── */
+@keyframes dashFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Grid with equal-height rows ── */
+.grid-2--stretch {
+  align-items: stretch;
+}
+.grid-2--stretch > .card {
+  display: flex;
+  flex-direction: column;
+}
+.grid-2--stretch > .card > .card-title {
+  flex-shrink: 0;
+}
+.grid-2--stretch > .card > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.grid-2--stretch > .card > div > * {
+  flex: 1;
+}
+
+/* ════════════════════════════════════════
+   HEATMAP TEXT FIX
+   SkillsHeatmap cells use white text which
+   is invisible on light-colored cells.
+   Force dark text on light cells, white on dark.
+════════════════════════════════════════ */
+
+/* Target the heatmap cell text — override white */
+.dash-main [class*="heatmap"] text,
+.dash-main [class*="heatmap"] span,
+.dash-main [class*="Heatmap"] text,
+.dash-main [class*="Heatmap"] span,
+.dash-main [class*="heat-cell"] span,
+.dash-main [class*="heat-cell"] div {
+  color: #1a1a2e !important;
+  fill: #1a1a2e !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+}
+
+/* Plotly heatmap text annotations */
+.dash-main .gtitle,
+.dash-main .annotation-text,
+.dash-main .annotation text {
+  fill: #1a1a2e !important;
+  color: #1a1a2e !important;
+}
+
+/* If heatmap uses inline SVG text directly */
+.dash-main svg text.heatmap-label,
+.dash-main svg .cell-label {
+  fill: #1a1a2e !important;
+}
+
+/* Broad override: any text inside a cell-like element
+   that has a light background gets dark text */
+.dash-main [style*="background: rgb(255"] span,
+.dash-main [style*="background: rgb(254"] span,
+.dash-main [style*="background: rgb(253"] span,
+.dash-main [style*="background: rgb(252"] span,
+.dash-main [style*="background: rgb(251"] span,
+.dash-main [style*="background: rgb(250"] span,
+.dash-main [style*="background: rgb(249"] span,
+.dash-main [style*="background: rgb(248"] span,
+.dash-main [style*="background: rgb(247"] span,
+.dash-main [style*="background: rgb(246"] span,
+.dash-main [style*="background: rgb(245"] span,
+.dash-main [style*="background: rgb(244"] span,
+.dash-main [style*="background: rgb(243"] span,
+.dash-main [style*="background: rgb(242"] span,
+.dash-main [style*="background: rgb(241"] span,
+.dash-main [style*="background: rgb(240"] span {
+  color: #1a1a2e !important;
+  font-weight: 700 !important;
+}
+
+/* ════════════════════════════════════════
+   CHART CANVAS — respect chart's own sizing
+════════════════════════════════════════ */
+.card > div canvas {
+  width: 100% !important;
+}
+   Forces all chart text to use our tokens
+   so nothing renders black in dark mode
+════════════════════════════════════════ */
+
+/* All text inside chart cards */
+.dash-main .card *,
+.dash-main .card p,
+.dash-main .card span,
+.dash-main .card div,
+.dash-main .card td,
+.dash-main .card th,
+.dash-main .card label,
+.dash-main .card li,
+.dash-main .card h1,
+.dash-main .card h2,
+.dash-main .card h3,
+.dash-main .card h4 {
+  color: var(--t);
+}
+
+/* Secondary / muted text — anything that looks like a label or helper */
+.dash-main .card [class*="muted"],
+.dash-main .card [class*="secondary"],
+.dash-main .card [class*="label"],
+.dash-main .card [class*="sub"],
+.dash-main .card [class*="hint"],
+.dash-main .card [class*="caption"],
+.dash-main .card small {
+  color: var(--t2) !important;
+}
+
+/* SVG text elements inside charts (recharts, d3, etc.) */
+.dash-main .card svg text,
+.dash-main .card svg tspan {
+  fill: var(--t2) !important;
+}
+
+/* Recharts specific */
+.dash-main .recharts-text,
+.dash-main .recharts-cartesian-axis-tick-value,
+.dash-main .recharts-legend-item-text,
+.dash-main .recharts-label,
+.dash-main .recharts-tooltip-label,
+.dash-main .recharts-default-tooltip {
+  fill: var(--t2) !important;
+  color: var(--t2) !important;
+}
+
+/* Recharts tooltip */
+.dash-main .recharts-default-tooltip {
+  background: var(--bg3) !important;
+  border: 1px solid var(--b) !important;
+  border-radius: 8px !important;
+}
+.dash-main .recharts-tooltip-item {
+  color: var(--t) !important;
+}
+
+/* Table text inside cards */
+.dash-main table,
+.dash-main table td,
+.dash-main table th,
+.dash-main table tr {
+  color: var(--t) !important;
+  border-color: var(--b) !important;
+}
+.dash-main thead th {
+  color: var(--t3) !important;
+  background: var(--bg3) !important;
+}
+
+/* Select / dropdown in dev radar */
+.dash-main select {
+  background: var(--bg3) !important;
+  color: var(--t) !important;
+  border: 1px solid var(--b) !important;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.dash-main select option {
+  background: var(--bg2);
+  color: var(--t);
+}
+
+/* Input fields inside cards */
+.dash-main input:not([type="range"]) {
+  background: var(--bg3) !important;
+  color: var(--t) !important;
+  border-color: var(--b) !important;
+}
+
+/* Stat grid text inside cards */
+.dash-main .stat-grid .stat-card * { color: inherit; }
+
+/* ── Plotly heatmap: annotation text (numbers inside cells) ── */
+.dash-main .plot-container .annotation-text tspan,
+.dash-main .plot-container .annotation-text text,
+.dash-main .js-plotly-plot .annotation text,
+.dash-main .js-plotly-plot text.annotation-text {
+  fill: #0C0E1A !important;
+  font-weight: 700 !important;
+}
+
+/* ── Recharts heatmap cell labels ── */
+.dash-main .recharts-label-list text,
+.dash-main .recharts-label text {
+  fill: #0C0E1A !important;
+  font-weight: 700 !important;
+}
+
+/* ── Generic: white text on a colored cell ── */
+.dash-main [style*="color: white"],
+.dash-main [style*="color: #fff"],
+.dash-main [style*="color: #ffffff"],
+.dash-main [style*="color:white"],
+.dash-main [style*="color:#fff"],
+.dash-main [style*="color:#ffffff"] {
+  color: #0C0E1A !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .dash-topbar-logo { display: none; }
+  .dash-sidebar { display: none; }
+  .dash-shell { display: block; overflow-y: auto; }
+  .dash-main { height: auto; padding: 20px 16px 48px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .dash-topbar-right .dash-pdf-btn { display: none; }
+}

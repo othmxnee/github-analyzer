@@ -1,103 +1,213 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getRepoAnalysisResult, startRepoAnalysis } from '../services/api'
 import Loader from '../components/Loader'
-import ThemeToggle from '../components/ThemeToggle'
+import '../styles/Home.css'
 
-/* ── dependency graph illustration ── */
-function GraphIllustration() {
+/* ═════════════════════════════════════════
+   PARTICLE CANVAS
+═════════════════════════════════════════ */
+function ParticleCanvas({ isLight }) {
+  const canvasRef = useRef(null)
+  const stateRef  = useRef({ nodes: [], raf: null })
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const N   = 42
+
+    const resize = () => {
+      canvas.width  = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    stateRef.current.nodes = Array.from({ length: N }, () => ({
+      x:  Math.random() * canvas.width,
+      y:  Math.random() * canvas.height,
+      vx: (Math.random() - .5) * .36,
+      vy: (Math.random() - .5) * .36,
+      r:  Math.random() * 2.6 + 1.2,
+    }))
+
+    const ac = isLight ? [37, 88, 212] : [59, 110, 234]
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const { nodes } = stateRef.current
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const dx = nodes[i].x - nodes[j].x
+          const dy = nodes[i].y - nodes[j].y
+          const d  = Math.hypot(dx, dy)
+          if (d < 130) {
+            ctx.beginPath()
+            ctx.moveTo(nodes[i].x, nodes[i].y)
+            ctx.lineTo(nodes[j].x, nodes[j].y)
+            ctx.strokeStyle = `rgba(${ac[0]},${ac[1]},${ac[2]},${(0.13*(1-d/130)).toFixed(3)})`
+            ctx.lineWidth = .8
+            ctx.stroke()
+          }
+        }
+      }
+      for (const n of nodes) {
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
+        ctx.fillStyle = isLight
+          ? `rgba(37,88,212,${(0.22+n.r*.03).toFixed(2)})`
+          : `rgba(59,110,234,${(0.45+n.r*.04).toFixed(2)})`
+        ctx.fill()
+        n.x += n.vx; n.y += n.vy
+        if (n.x < 0 || n.x > canvas.width)  n.vx *= -1
+        if (n.y < 0 || n.y > canvas.height) n.vy *= -1
+      }
+      stateRef.current.raf = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      if (stateRef.current.raf) cancelAnimationFrame(stateRef.current.raf)
+    }
+  }, [isLight])
+
   return (
-    <svg viewBox="0 0 380 220" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{ width: '100%', maxWidth: 380 }}>
-      <line x1="100" y1="80"  x2="190" y2="110" stroke="#BFDBFE" strokeWidth="1.5" />
-      <line x1="190" y1="110" x2="280" y2="75"  stroke="#BFDBFE" strokeWidth="1.5" />
-      <line x1="190" y1="110" x2="230" y2="165" stroke="#BFDBFE" strokeWidth="1.5" />
-      <line x1="100" y1="80"  x2="75"  y2="155" stroke="#E2E8F0" strokeWidth="1.2" />
-      <line x1="75"  y1="155" x2="230" y2="165" stroke="#E2E8F0" strokeWidth="1.2" />
-      <line x1="280" y1="75"  x2="320" y2="145" stroke="#E2E8F0" strokeWidth="1.2" />
-      <line x1="320" y1="145" x2="230" y2="165" stroke="#E2E8F0" strokeWidth="1.2" />
-      <circle cx="190" cy="110" r="18" fill="#EFF6FF" stroke="#2563EB" strokeWidth="1.5" />
-      <circle cx="190" cy="110" r="7"  fill="#2563EB">
-        <animate attributeName="r" values="7;9;7" dur="2.5s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="100" cy="80"  r="12" fill="#F8FAFC" stroke="#93C5FD" strokeWidth="1.2" />
-      <circle cx="100" cy="80"  r="5"  fill="#60A5FA" />
-      <circle cx="280" cy="75"  r="12" fill="#F8FAFC" stroke="#93C5FD" strokeWidth="1.2" />
-      <circle cx="280" cy="75"  r="5"  fill="#60A5FA" />
-      <circle cx="230" cy="165" r="11" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.2" />
-      <circle cx="230" cy="165" r="4.5" fill="#94A3B8" />
-      <circle cx="75"  cy="155" r="9"  fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.2" />
-      <circle cx="75"  cy="155" r="3.5" fill="#94A3B8" />
-      <circle cx="320" cy="145" r="9"  fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.2" />
-      <circle cx="320" cy="145" r="3.5" fill="#94A3B8" />
-      <text x="190" y="94"  textAnchor="middle" fontSize="8"   fill="#1D4ED8" fontFamily="monospace">app.py</text>
-      <text x="100" y="64"  textAnchor="middle" fontSize="7.5" fill="#3B82F6" fontFamily="monospace">auth.py</text>
-      <text x="280" y="59"  textAnchor="middle" fontSize="7.5" fill="#3B82F6" fontFamily="monospace">models.py</text>
-      <text x="230" y="183" textAnchor="middle" fontSize="7"   fill="#64748B" fontFamily="monospace">utils.py</text>
-      <text x="60"  y="148" textAnchor="middle" fontSize="7"   fill="#64748B" fontFamily="monospace">db.py</text>
-    </svg>
+    <canvas
+      ref={canvasRef}
+      style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', zIndex:0, display:'block' }}
+    />
   )
 }
 
-/* ── intersection observer for fade-in ── */
-function FadeObserver() {
+/* ═════════════════════════════════════════
+   PCA CANVAS
+═════════════════════════════════════════ */
+function PCACanvas({ isLight }) {
+  const canvasRef = useRef(null)
   useEffect(() => {
-    const els = document.querySelectorAll('.fi')
-    const io = new IntersectionObserver(
-      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('fv') }),
-      { threshold: 0.1 }
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0,0,320,220)
+    const COLORS  = ['#3B6EEA','#00C896','#F59E0B','#A78BFA','#EF4444','#06B6D4','#7880A0']
+    const CENTERS = [[80,160],[220,140],[240,60],[150,100],[100,60],[200,190],[150,160]]
+    const COUNTS  = [18,24,8,12,7,6,11]
+    const devs = []
+    CENTERS.forEach(([cx,cy],r) => {
+      for (let i=0;i<COUNTS[r];i++) devs.push({x:cx+(Math.random()-.5)*48,y:cy+(Math.random()-.5)*44,r})
+    })
+    const gc  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.05)'
+    const axc = isLight ? 'rgba(0,0,0,0.18)'  : 'rgba(255,255,255,0.15)'
+    for (let x=0;x<=320;x+=64){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,220);ctx.strokeStyle=gc;ctx.lineWidth=.5;ctx.stroke()}
+    for (let y=0;y<=220;y+=44){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(320,y);ctx.strokeStyle=gc;ctx.lineWidth=.5;ctx.stroke()}
+    ctx.strokeStyle=axc;ctx.lineWidth=.8
+    ctx.beginPath();ctx.moveTo(16,110);ctx.lineTo(304,110);ctx.stroke()
+    ctx.beginPath();ctx.moveTo(160,8);ctx.lineTo(160,212);ctx.stroke()
+    ctx.fillStyle=axc;ctx.font='9px monospace'
+    ctx.fillText('PC1 →',268,106);ctx.fillText('PC2',164,18)
+    for (const d of devs){
+      ctx.beginPath();ctx.arc(d.x,d.y,4.5,0,Math.PI*2)
+      ctx.fillStyle=COLORS[d.r]+'BB';ctx.fill()
+      ctx.strokeStyle=COLORS[d.r];ctx.lineWidth=1;ctx.stroke()
+    }
+  }, [isLight])
+  return <canvas ref={canvasRef} width={320} height={220} style={{width:'100%',height:'100%',display:'block'}}/>
+}
+
+/* ═════════════════════════════════════════
+   SCROLL REVEAL
+═════════════════════════════════════════ */
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll('.hp-reveal')
+    const io  = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('hp-visible') }),
+      { threshold: 0.08 }
     )
     els.forEach(el => io.observe(el))
     return () => io.disconnect()
   }, [])
-  return null
 }
 
+/* ═════════════════════════════════════════
+   DATA
+═════════════════════════════════════════ */
+const FEATURES = [
+  { t:'Developer activity',      d:'Commit timelines, rankings, and inter-commit interval analysis across the full Git history.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+  { t:'Contribution inequality', d:'Gini coefficient and Lorenz curve showing how evenly work is spread across contributors.',           icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+  { t:'Knowledge ownership',     d:'Line-level ownership tracking and KCI index to detect knowledge silos and bus factor risks.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> },
+  { t:'Architectural risk',      d:'Dependency graphs and PageRank centrality to identify structurally critical files and coupling.',    icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5.5" y2="16.5"/><line x1="12" y1="8" x2="18.5" y2="16.5"/></svg> },
+  { t:'Code hotspots',           d:'Modification frequency surfaces your highest-churn files — the most active change targets.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0"/></svg> },
+  { t:'Risk scoring',            d:'Composite scores combining architectural centrality and ownership concentration into clear signals.',icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+]
+
+const ROLES = [
+  { name:'Frontend Developer',   desc:'Detected via extension ratios, folder paths, and UI-related commit keywords.',                       badge:'Extension + path',  color:'#3B6EEA' },
+  { name:'Backend Developer',    desc:'Lines-weighted: 200 backend lines beats 1 frontend line for correct classification.',               badge:'Lines-weighted',    color:'#00C896' },
+  { name:'DevOps Engineer',      desc:'CI/CD files, infra folders, and DevOps-specific commit message patterns.',                          badge:'Folder + keywords', color:'#F59E0B' },
+  { name:'Full Stack Developer', desc:'Balanced frontend and backend metrics with no single dominant category.',                            badge:'Balanced profile',  color:'#A78BFA' },
+  { name:'Tester',               desc:'Test% >40% AND dominates over backend and frontend — avoids false positives.',                       badge:'Dominance cond.',   color:'#EF4444' },
+  { name:'Mobile Developer',     desc:'Mobile-specific file extensions and folder patterns across iOS and Android stacks.',                 badge:'Extension detect.', color:'#06B6D4' },
+  { name:'Generalist',           desc:'K-Means clustering resolves ambiguous profiles — at least one metric above 15% required.',           badge:'K-Means cluster',   color:'#7880A0' },
+]
+
+const METRICS = [
+  { label:'Gini Coefficient', val:'0.74',   sub:'High inequality in commits',  bar:74,  cls:'' },
+  { label:'Bus Factor',       val:'2',      sub:'Critical knowledge risk',      bar:20,  cls:'red' },
+  { label:'KCI Score',        val:'0.41',   sub:'Moderate concentration',       bar:41,  cls:'green' },
+  { label:'Top Hotspot',      val:'app.py', sub:'247 modifications',            bar:88,  cls:'mono' },
+  { label:'Contributors',     val:'142',    sub:'Minimum 5 commits each',       bar:60,  cls:'green' },
+  { label:'Commits analyzed', val:'3,847',  sub:'Full history mined',           bar:100, cls:'' },
+]
+
+/* ═════════════════════════════════════════
+   HOME
+═════════════════════════════════════════ */
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [isLight, setIsLight] = useState(false)
   const navigate = useNavigate()
+  useReveal()
 
-  const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+  const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior:'smooth' })
+  const wait     = ms => new Promise(r => setTimeout(r, ms))
 
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
+  const toggleTheme = useCallback(() => {
+    setIsLight(v => {
+      const next = !v
+      document.documentElement.setAttribute('data-theme', next ? 'light' : '')
+      document.body.classList.toggle('lm', next)
+      return next
+    })
+  }, [])
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, fallbackUrl) => {
     e?.preventDefault()
+    const url = fallbackUrl || repoUrl
     setError('')
-    if (!repoUrl.trim())                { setError('Please enter a GitHub repository URL'); return }
-    if (!repoUrl.includes('github.com')){ setError('Please enter a valid GitHub URL');      return }
+    if (!url.trim())                { setError('Please enter a GitHub repository URL'); return }
+    if (!url.includes('github.com')){ setError('Please enter a valid GitHub URL');      return }
     setLoading(true)
     try {
-      const start = await startRepoAnalysis(repoUrl)
+      const start = await startRepoAnalysis(url)
       if (start.error) throw new Error(start.error)
-
       let results = null
-
       while (true) {
-        const data = await getRepoAnalysisResult(repoUrl)
-
-        if (data.status === 'done') {
-          results = data
-          break
-        }
-
-        if (data.status === 'error') {
-          throw new Error(data.error || 'Analysis failed')
-        }
-
+        const data = await getRepoAnalysisResult(url)
+        if (data.status === 'done')  { results = data; break }
+        if (data.status === 'error') throw new Error(data.error || 'Analysis failed')
         await wait(5000)
       }
-
       sessionStorage.setItem('analysisResults', JSON.stringify(results))
-      sessionStorage.setItem('repoUrl', repoUrl)
+      sessionStorage.setItem('repoUrl', url)
       navigate('/dashboard')
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'An unknown error occurred'
-      setError(msg === 'developer_id' || !msg
-        ? 'Analysis failed. Please check the repository URL and try again.'
-        : msg)
+      const msg = err.response?.data?.error || err.message || 'Unknown error'
+      setError(msg === 'developer_id' || !msg ? 'Analysis failed. Check the URL and try again.' : msg)
     } finally {
       setLoading(false)
     }
@@ -105,508 +215,282 @@ export default function Home() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+      {/* ══ NAVBAR ══ */}
+      <nav className="hp-nav">
+        <div className="hp-logo">git<span className="dot">·</span>analyzer</div>
+        <ul className="hp-navlinks">
+          <li><button onClick={() => scrollTo('hp-features')}>Features</button></li>
+          <li><button onClick={() => scrollTo('hp-roles')}>Developer roles</button></li>
+          <li><button onClick={() => scrollTo('hp-how')}>How it works</button></li>
+          <li><button onClick={() => scrollTo('hp-metrics')}>Metrics</button></li>
+        </ul>
+        <div className="hp-nav-right">
+          <button className="hp-mode-btn" onClick={toggleTheme}>
+            {isLight
+              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            }
+            {isLight ? 'Dark mode' : 'Light mode'}
+          </button>
+          <button className="hp-nav-cta" onClick={() => scrollTo('hp-input')}>Try it →</button>
+        </div>
+      </nav>
 
-        .hp{
-          font-family:'Inter',sans-serif;
-          color:var(--color-text-primary);
-          background:var(--color-background-primary);
-          min-height:100vh;
-          -webkit-font-smoothing:antialiased;
-        }
-
-        /* NAV */
-        .hp-nav{
-          position:sticky;top:0;z-index:100;
-          height:60px;display:flex;align-items:center;justify-content:space-between;
-          padding:0 48px;
-          background:var(--color-background-primary);
-          border-bottom:1px solid var(--color-border-tertiary);
-        }
-        .hp-logo{
-          font-family:'JetBrains Mono',monospace;
-          font-size:14px;font-weight:500;
-          color:var(--color-text-primary);
-          text-decoration:none;
-        }
-        .hp-logo span{color:#2563EB;}
-        .hp-navlinks{
-          display:flex;align-items:center;gap:32px;list-style:none;
-        }
-        .hp-navlinks button{
-          background:none;border:none;cursor:pointer;
-          font-size:14px;font-weight:400;
-          color:var(--color-text-secondary);
-          font-family:'Inter',sans-serif;
-          transition:color .15s;padding:0;
-        }
-        .hp-navlinks button:hover{color:var(--color-text-primary);}
-        .hp-nav-r{display:flex;align-items:center;gap:12px;}
-        .hp-nav-try{
-          padding:7px 18px;background:#2563EB;color:#fff;
-          border:none;border-radius:8px;
-          font-size:13px;font-weight:500;
-          font-family:'Inter',sans-serif;
-          cursor:pointer;transition:background .15s;
-        }
-        .hp-nav-try:hover{background:#1D4ED8;}
-
-        /* HERO */
-        .hp-hero{
-          display:grid;grid-template-columns:1fr 1fr;
-          align-items:center;gap:80px;
-          max-width:1120px;margin:0 auto;
-          padding:100px 48px 80px;
-        }
-        .hp-kicker{
-          display:inline-flex;align-items:center;gap:8px;
-          font-size:12px;font-weight:500;
-          color:#2563EB;letter-spacing:.06em;
-          text-transform:uppercase;margin-bottom:20px;
-          font-family:'JetBrains Mono',monospace;
-        }
-        .hp-kicker-dot{
-          width:6px;height:6px;border-radius:50%;
-          background:#2563EB;
-          animation:blink 2.4s ease-in-out infinite;
-        }
-        @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
-        .hp-h1{
-          font-size:clamp(34px,4.5vw,54px);
-          font-weight:600;line-height:1.1;
-          letter-spacing:-.04em;margin-bottom:20px;
-        }
-        .hp-h1 em{font-style:normal;color:#2563EB;}
-        .hp-sub{
-          font-size:16px;line-height:1.7;
-          color:var(--color-text-secondary);
-          font-weight:400;margin-bottom:36px;
-          max-width:420px;
-        }
-
-        /* INPUT BAR */
-        .hp-bar{
-          display:flex;align-items:center;
-          background:var(--color-background-primary);
-          border:1.5px solid var(--color-border-secondary);
-          border-radius:12px;
-          padding:6px 6px 6px 20px;gap:8px;
-          transition:border-color .2s,box-shadow .2s;
-          margin-bottom:10px;
-        }
-        .hp-bar:focus-within{
-          border-color:#2563EB;
-          box-shadow:0 0 0 3px rgba(37,99,235,.10);
-        }
-        .hp-bar input{
-          flex:1;border:none;outline:none;background:transparent;
-          font-size:14px;
-          font-family:'JetBrains Mono',monospace;
-          color:var(--color-text-primary);min-width:0;
-        }
-        .hp-bar input::placeholder{color:var(--color-text-secondary);}
-        .hp-bar-btn{
-          flex-shrink:0;padding:9px 22px;
-          background:#2563EB;color:#fff;
-          border:none;border-radius:8px;
-          font-size:13px;font-weight:500;
-          font-family:'Inter',sans-serif;
-          cursor:pointer;transition:background .15s;white-space:nowrap;
-        }
-        .hp-bar-btn:hover:not(:disabled){background:#1D4ED8;}
-        .hp-bar-btn:disabled{opacity:.5;cursor:not-allowed;}
-        .hp-hint{font-size:12px;color:var(--color-text-secondary);font-family:'JetBrains Mono',monospace;}
-        .hp-err{font-size:13px;color:#DC2626;margin-top:8px;font-family:'JetBrains Mono',monospace;}
-
-        /* GRAPH CARD */
-        .hp-gcard{
-          background:var(--color-background-secondary);
-          border:1px solid var(--color-border-tertiary);
-          border-radius:16px;padding:28px 24px;
-        }
-        .hp-gcard-hd{
-          display:flex;align-items:center;gap:6px;
-          font-size:11px;font-family:'JetBrains Mono',monospace;
-          color:var(--color-text-secondary);margin-bottom:20px;
-        }
-        .hp-gdot{width:6px;height:6px;border-radius:50%;background:#22C55E;}
-
-        /* STATS */
-        .hp-stats{
-          border-top:1px solid var(--color-border-tertiary);
-          border-bottom:1px solid var(--color-border-tertiary);
-          background:var(--color-background-secondary);
-        }
-        .hp-stats-inner{
-          max-width:1120px;margin:0 auto;
-          padding:40px 48px;
-          display:grid;grid-template-columns:repeat(4,1fr);
-          text-align:center;
-        }
-        .hp-stat+.hp-stat{border-left:1px solid var(--color-border-tertiary);}
-        .hp-stat-val{
-          font-size:28px;font-weight:600;
-          letter-spacing:-.03em;
-          font-family:'JetBrains Mono',monospace;
-          margin-bottom:4px;
-        }
-        .hp-stat-lbl{font-size:13px;color:var(--color-text-secondary);}
-
-        /* SECTION */
-        .hp-section{max-width:1120px;margin:0 auto;padding:96px 48px;}
-        .hp-alt{background:var(--color-background-secondary);}
-        .hp-sh{text-align:center;margin-bottom:56px;}
-        .hp-ey{
-          font-size:11px;font-weight:500;
-          text-transform:uppercase;letter-spacing:.1em;
-          color:#2563EB;margin-bottom:10px;
-          font-family:'JetBrains Mono',monospace;
-        }
-        .hp-st{
-          font-size:clamp(24px,3vw,32px);
-          font-weight:600;letter-spacing:-.03em;
-        }
-
-        /* FEATURES */
-        .hp-feats{
-          display:grid;grid-template-columns:repeat(3,1fr);
-          border:1px solid var(--color-border-tertiary);
-          border-radius:16px;overflow:hidden;
-        }
-        .hp-feat{
-          background:var(--color-background-primary);
-          padding:32px 28px;
-          border-right:1px solid var(--color-border-tertiary);
-          border-bottom:1px solid var(--color-border-tertiary);
-          transition:background .2s;
-        }
-        .hp-feat:hover{background:var(--color-background-secondary);}
-        .hp-feat:nth-child(3n){border-right:none;}
-        .hp-feat:nth-child(n+4){border-bottom:none;}
-        .hp-feat-ico{
-          width:32px;height:32px;margin-bottom:14px;
-          color:#2563EB;
-        }
-        .hp-feat-t{font-size:15px;font-weight:600;margin-bottom:8px;}
-        .hp-feat-d{font-size:13px;line-height:1.65;color:var(--color-text-secondary);}
-
-        /* STEPS */
-        .hp-steps{
-          display:grid;grid-template-columns:repeat(3,1fr);
-          gap:48px;position:relative;
-        }
-        .hp-steps::before{
-          content:'';position:absolute;
-          top:22px;left:calc(16.66% + 14px);right:calc(16.66% + 14px);
-          height:1px;background:var(--color-border-tertiary);
-        }
-        .hp-step-num{
-          width:44px;height:44px;border-radius:50%;
-          background:var(--color-background-primary);
-          border:1px solid var(--color-border-tertiary);
-          display:flex;align-items:center;justify-content:center;
-          font-size:14px;font-weight:600;color:#2563EB;
-          font-family:'JetBrains Mono',monospace;
-          margin-bottom:20px;position:relative;z-index:1;
-        }
-        .hp-step-t{font-size:15px;font-weight:600;margin-bottom:8px;}
-        .hp-step-d{font-size:13px;line-height:1.65;color:var(--color-text-secondary);}
-
-        /* METRICS */
-        .hp-mets{
-          display:grid;grid-template-columns:repeat(4,1fr);
-          border:1px solid var(--color-border-tertiary);
-          border-radius:16px;overflow:hidden;
-        }
-        .hp-met{
-          padding:32px 24px;
-          background:var(--color-background-primary);
-          border-right:1px solid var(--color-border-tertiary);
-        }
-        .hp-met:last-child{border-right:none;}
-        .hp-met-lbl{
-          font-size:11px;font-family:'JetBrains Mono',monospace;
-          color:var(--color-text-secondary);margin-bottom:12px;
-          text-transform:uppercase;letter-spacing:.06em;
-        }
-        .hp-met-val{
-          font-size:30px;font-weight:600;
-          font-family:'JetBrains Mono',monospace;
-          color:#2563EB;letter-spacing:-.03em;
-          margin-bottom:6px;
-        }
-        .hp-met-sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;}
-        .hp-met-bar{height:3px;background:var(--color-border-tertiary);border-radius:2px;overflow:hidden;}
-        .hp-met-fill{height:100%;background:#2563EB;border-radius:2px;}
-
-        /* CTA */
-        .hp-cta{
-          text-align:center;padding:100px 48px;
-          border-top:1px solid var(--color-border-tertiary);
-          background:var(--color-background-secondary);
-        }
-        .hp-cta-t{
-          font-size:clamp(26px,3.5vw,38px);
-          font-weight:600;letter-spacing:-.035em;
-          margin-bottom:12px;
-        }
-        .hp-cta-s{font-size:16px;color:var(--color-text-secondary);margin-bottom:40px;}
-        .hp-cta-bar{
-          display:flex;align-items:center;
-          max-width:560px;margin:0 auto;
-          background:var(--color-background-primary);
-          border:1.5px solid var(--color-border-secondary);
-          border-radius:12px;padding:6px 6px 6px 20px;gap:8px;
-          transition:border-color .2s,box-shadow .2s;
-        }
-        .hp-cta-bar:focus-within{
-          border-color:#2563EB;
-          box-shadow:0 0 0 3px rgba(37,99,235,.10);
-        }
-        .hp-cta-bar input{
-          flex:1;border:none;outline:none;background:transparent;
-          font-size:14px;font-family:'JetBrains Mono',monospace;
-          color:var(--color-text-primary);min-width:0;
-        }
-        .hp-cta-bar input::placeholder{color:var(--color-text-secondary);}
-
-        /* PAGE FOOTER */
-        .hp-foot{
-          border-top:1px solid var(--color-border-tertiary);
-          padding:20px 48px;
-          display:flex;align-items:center;justify-content:space-between;
-          background:var(--color-background-primary);
-        }
-        .hp-foot span{
-          font-size:12px;color:var(--color-text-secondary);
-          font-family:'JetBrains Mono',monospace;
-        }
-
-        /* FADE */
-        .fi{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease;}
-        .fv{opacity:1;transform:translateY(0);}
-
-        /* RESPONSIVE */
-        @media(max-width:960px){
-          .hp-hero{grid-template-columns:1fr;gap:0;padding:64px 24px 48px;}
-          .hp-hero-r{display:none;}
-          .hp-feats{grid-template-columns:1fr 1fr;}
-          .hp-feat:nth-child(3n){border-right:1px solid var(--color-border-tertiary);}
-          .hp-feat:nth-child(2n){border-right:none;}
-          .hp-steps{grid-template-columns:1fr;gap:32px;}
-          .hp-steps::before{display:none;}
-          .hp-mets{grid-template-columns:1fr 1fr;}
-          .hp-met:nth-child(2){border-right:none;}
-          .hp-met:nth-child(3){border-right:1px solid var(--color-border-tertiary);}
-          .hp-met:nth-child(n+3){border-top:1px solid var(--color-border-tertiary);}
-          .hp-stats-inner{grid-template-columns:1fr 1fr;gap:24px;}
-          .hp-stat+.hp-stat{border-left:none;}
-          .hp-section{padding:64px 24px;}
-          .hp-nav{padding:0 24px;}
-          .hp-navlinks{display:none;}
-          .hp-cta{padding:64px 24px;}
-          .hp-foot{padding:20px 24px;}
-        }
-        @media(max-width:560px){
-          .hp-feats{grid-template-columns:1fr;}
-          .hp-mets{grid-template-columns:1fr;}
-          .hp-met{border-right:none!important;border-top:1px solid var(--color-border-tertiary);}
-          .hp-met:first-child{border-top:none;}
-        }
-      `}</style>
-
-      <div className="hp">
-
-        {/* NAV */}
-        <nav className="hp-nav">
-          <a className="hp-logo" href="#"><span>git</span>·analyzer</a>
-          <ul className="hp-navlinks">
-            <li><button onClick={() => scrollTo('features')}>Features</button></li>
-            <li><button onClick={() => scrollTo('how-it-works')}>How it works</button></li>
-            <li><button onClick={() => scrollTo('metrics')}>Metrics</button></li>
-          </ul>
-          <div className="hp-nav-r">
-            <ThemeToggle />
-            <button className="hp-nav-try" onClick={() => scrollTo('hero-input')}>Try it</button>
+      {/* ══ HERO ══ */}
+      <section className="hp-hero">
+        <ParticleCanvas isLight={isLight} />
+        <div className="hp-hero-inner">
+          <div className="hp-badge">
+            <span className="hp-badge-dot" />
+            Repository intelligence
           </div>
-        </nav>
+          <h1 className="hp-h1">
+            Paste a repo.
+            <span className="hp-h1-accent">See everything.</span>
+          </h1>
+          <p className="hp-sub">
+            Git history doesn't lie. Developer activity, knowledge concentration,
+            architectural risks, and team roles — extracted automatically.
+          </p>
 
-        {/* HERO */}
-        <section style={{ background: 'var(--color-background-primary)' }}>
-          <div className="hp-hero">
-            <div>
-              <div className="hp-kicker">
-                <span className="hp-kicker-dot" />
-                Repository intelligence
+          <div className="hp-island" id="hp-input">
+            <div className="hp-island-label">Analyze a repository</div>
+            <form onSubmit={handleSubmit}>
+              <div className="hp-input-row">
+                <div className="hp-prompt">&gt;</div>
+                <input
+                  className="hp-input"
+                  type="text"
+                  value={repoUrl}
+                  onChange={e => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/pallets/flask"
+                  disabled={loading}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button type="submit" className="hp-submit" disabled={loading}>
+                  {loading ? 'Analyzing…' : 'Analyze →'}
+                </button>
               </div>
-              <h1 className="hp-h1">
-                Understand any<br />GitHub repo,{' '}<em>deeply</em>
-              </h1>
-              <p className="hp-sub">
-                Mine Git history to reveal developer activity, knowledge concentration,
-                architectural risks, and code hotspots — all in one dashboard.
-              </p>
-              <form id="hero-input" onSubmit={handleSubmit}>
-                <div className="hp-bar">
-                  <input
-                    type="text"
-                    value={repoUrl}
-                    onChange={e => setRepoUrl(e.target.value)}
-                    placeholder="https://github.com/pallets/flask"
-                    disabled={loading}
-                    autoComplete="off"
-                  />
-                  <button type="submit" disabled={loading} className="hp-bar-btn">
-                    {loading ? 'Analyzing…' : 'Analyze →'}
-                  </button>
-                </div>
-                {error && <p className="hp-err">{error}</p>}
-              </form>
-              <p className="hp-hint" style={{ marginTop: 10 }}>
-                Try: github.com/pallets/flask · github.com/django/django
-              </p>
-            </div>
-
-            <div className="hp-hero-r">
-              <div className="hp-gcard">
-                <div className="hp-gcard-hd">
-                  <span className="hp-gdot" />
-                  dependency graph · flask 3.1
-                </div>
-                <GraphIllustration />
+              {error && <div className="hp-err">{error}</div>}
+            </form>
+            <div className="hp-island-footer">
+              <div className="hp-pills">
+                {['pallets/flask','django/django','torvalds/linux'].map(r => (
+                  <div key={r} className="hp-pill" onClick={() => setRepoUrl(`https://github.com/${r}`)}>
+                    {r}
+                  </div>
+                ))}
               </div>
+              <div className="hp-note">No auth required</div>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* STATS */}
-        <div className="hp-stats">
-          <div className="hp-stats-inner">
-            {[
-              { val: '6',    lbl: 'analysis dimensions' },
-              { val: '18+',  lbl: 'chart types' },
-              { val: '100%', lbl: 'client-side rendering' },
-              { val: 'No',   lbl: 'auth required' },
-            ].map(({ val, lbl }) => (
-              <div className="hp-stat" key={lbl}>
-                <div className="hp-stat-val">{val}</div>
-                <div className="hp-stat-lbl">{lbl}</div>
+        <div className="hp-scroll-hint">
+          <div className="hp-scroll-arr">
+            <span>Scroll</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ STATS ══ */}
+      <div className="hp-stats">
+        {[{n:'6',l:'Analysis dimensions'},{n:'18+',l:'Chart types'},{n:'15',l:'Metrics per developer'},{n:'7',l:'Roles detected'},{n:'Zero',l:'Auth required'}].map(({n,l}) => (
+          <div className="hp-stat" key={l}>
+            <div className="hp-stat-n">{n}</div>
+            <div className="hp-stat-l">{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ══ FEATURES ══ */}
+      <div className="hp-divider"/>
+      <section className="hp-section" id="hp-features">
+        <div className="hp-inner">
+          <div className="hp-reveal">
+            <div className="hp-s-label">What it analyzes</div>
+            <div className="hp-s-title">Six lenses on your codebase</div>
+            <div className="hp-s-sub">Every dimension of repository health, in one dashboard.</div>
+          </div>
+          <div className="hp-feats hp-reveal">
+            {FEATURES.map(({t,d,icon}) => (
+              <div className="hp-feat" key={t}>
+                <div className="hp-feat-ico">{icon}</div>
+                <div className="hp-feat-t">{t}</div>
+                <div className="hp-feat-d">{d}</div>
               </div>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* FEATURES */}
-        <div id="features">
-          <div className="hp-section fi">
-            <div className="hp-sh">
-              <p className="hp-ey">What it analyzes</p>
-              <h2 className="hp-st">Six lenses on your codebase</h2>
+      {/* ══ ROLES ══ */}
+      <div className="hp-divider"/>
+      <section className="hp-section alt" id="hp-roles">
+        <div className="hp-inner">
+          <div className="hp-reveal">
+            <div className="hp-s-label">Developer Role Detection</div>
+            <div className="hp-s-title">Automatically profile every contributor</div>
+            <div className="hp-s-sub">
+              15 metrics per developer — file extension ratios, folder path patterns, and commit message
+              keywords — then K-Means clustering assigns precise technical roles.
             </div>
-            <div className="hp-feats">
-              {[
-                { t: 'Developer activity',      d: 'Commit timelines, rankings, and inter-commit interval analysis across the full Git history.' },
-                { t: 'Contribution inequality', d: 'Gini coefficient and Lorenz curve showing how evenly work is spread across contributors.' },
-                { t: 'Knowledge ownership',     d: 'Line-level ownership tracking and KCI index to detect knowledge silos and bus factor risks.' },
-                { t: 'Architectural risk',      d: 'Dependency graphs and PageRank centrality to identify structurally critical files and coupling.' },
-                { t: 'Code hotspots',           d: 'Modification frequency surfaces your highest-churn files — the most active change targets.' },
-                { t: 'Risk scoring',            d: 'Composite scores combining architectural centrality and ownership concentration into clear signals.' },
-              ].map(({ t, d }) => (
-                <div className="hp-feat" key={t}>
-                  <svg className="hp-feat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M17.66 6.34l-2.12 2.12M6.34 17.66l-2.12 2.12" />
-                  </svg>
-                  <div className="hp-feat-t">{t}</div>
-                  <div className="hp-feat-d">{d}</div>
-                </div>
-              ))}
+          </div>
+          <div className="hp-roles hp-reveal">
+            {ROLES.map(({name,desc,badge,color}) => (
+              <div className="hp-role" key={name}>
+                <div className="hp-role-dot" style={{background:color}}/>
+                <div className="hp-role-name">{name}</div>
+                <div className="hp-role-desc">{desc}</div>
+                <div className="hp-role-badge" style={{background:color+'22',color}}>{badge}</div>
+              </div>
+            ))}
+            <div className="hp-role hp-role-empty">
+              <div className="hp-role-empty-n">≥ 5</div>
+              <div className="hp-role-empty-l">Minimum commits<br/>to include a developer</div>
+            </div>
+          </div>
+          <div className="hp-pca hp-reveal">
+            <div className="hp-pca-text">
+              <div className="hp-s-label">Skill Map</div>
+              <div className="hp-s-title" style={{marginBottom:10}}>PCA developer<br/>skill visualization</div>
+              <div className="hp-s-sub" style={{marginBottom:20}}>
+                Principal Component Analysis projects every contributor onto a 2D map — revealing clusters
+                of similar skill profiles, outliers, and the true shape of your team.
+              </div>
+              <div className="hp-pca-legend">
+                {[{label:'Frontend',color:'#3B6EEA'},{label:'Backend',color:'#00C896'},{label:'DevOps',color:'#F59E0B'},{label:'Full Stack',color:'#A78BFA'},{label:'Tester',color:'#EF4444'},{label:'Mobile',color:'#06B6D4'},{label:'Generalist',color:'#7880A0'}].map(({label,color}) => (
+                  <div className="hp-pca-leg" key={label}>
+                    <div className="hp-pca-dot" style={{background:color}}/>
+                    {label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hp-pca-vis">
+              <div className="hp-pca-wrap"><PCACanvas isLight={isLight}/></div>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* HOW IT WORKS */}
-        <div id="how-it-works" className="hp-alt">
-          <div className="hp-section fi">
-            <div className="hp-sh">
-              <p className="hp-ey">How it works</p>
-              <h2 className="hp-st">Three steps to insight</h2>
-            </div>
-            <div className="hp-steps">
-              {[
-                { n: '1', t: 'Paste a repository URL',      d: 'Any public GitHub repository. No authentication, API keys, or configuration needed.' },
-                { n: '2', t: 'Analysis runs automatically', d: 'PyDriller extracts commit history, file changes, and authorship data and computes all metrics.' },
-                { n: '3', t: 'Explore the dashboard',       d: 'Interactive charts, heatmaps, dependency graphs, and risk tables — all in one place.' },
-              ].map(({ n, t, d }) => (
-                <div key={n}>
-                  <div className="hp-step-num">{n}</div>
-                  <div className="hp-step-t">{t}</div>
-                  <div className="hp-step-d" style={{ marginTop: 8 }}>{d}</div>
-                </div>
-              ))}
-            </div>
+      {/* ══ HOW IT WORKS ══ */}
+      <div className="hp-divider"/>
+      <section className="hp-section" id="hp-how">
+        <div className="hp-inner">
+          <div className="hp-reveal">
+            <div className="hp-s-label">How it works</div>
+            <div className="hp-s-title">Three steps to insight</div>
+            <div className="hp-s-sub">No setup. No configuration. No API keys. Just a GitHub URL.</div>
           </div>
-        </div>
-
-        {/* METRICS */}
-        <div id="metrics">
-          <div className="hp-section fi">
-            <div className="hp-sh">
-              <p className="hp-ey">Sample output</p>
-              <h2 className="hp-st">What you'll see</h2>
-            </div>
-            <div className="hp-mets">
+          <div className="hp-steps hp-reveal">
+            {[
+              {n:'01',t:'Paste a repository URL',d:'Any public GitHub repository. No authentication, API keys, or configuration needed.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>},
+              {n:'02',t:'Analysis runs automatically',d:'PyDriller extracts commit history, file changes, and authorship data and computes all 15 metrics per developer.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>},
+              {n:'03',t:'Explore the dashboard',d:'Interactive charts, heatmaps, dependency graphs, PCA skill maps, and risk tables — all in one place.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+            ].map(({n,t,d,icon},i) => (
+              <div className="hp-step" key={n} style={i>0?{borderLeft:'1px solid var(--b)'}:{}}>
+                <div className="hp-step-num">{n}</div>
+                <div className="hp-step-ico">{icon}</div>
+                <div className="hp-step-t">{t}</div>
+                <div className="hp-step-d">{d}</div>
+              </div>
+            ))}
+          </div>
+          <div className="hp-terminal-row hp-reveal">
+            <div className="hp-term-text">
+              <div className="hp-s-label">See it in action</div>
+              <div className="hp-s-title" style={{marginBottom:12}}>Live analysis output</div>
+              <div className="hp-s-sub" style={{marginBottom:24}}>
+                Watch the platform extract and compute in real time — from raw Git history to role-annotated developer profiles.
+              </div>
               {[
-                { l: 'Gini coefficient', v: '0.74',   s: 'High inequality in commits', b: 74 },
-                { l: 'Bus factor',       v: '2',       s: 'Critical knowledge risk',    b: 20 },
-                { l: 'KCI score',        v: '0.41',    s: 'Moderate concentration',     b: 41 },
-                { l: 'Top hotspot',      v: 'app.py',  s: '247 modifications',          b: 88 },
-              ].map(({ l, v, s, b }) => (
-                <div className="hp-met" key={l}>
-                  <div className="hp-met-lbl">{l}</div>
-                  <div className="hp-met-val">{v}</div>
-                  <div className="hp-met-sub">{s}</div>
-                  <div className="hp-met-bar">
-                    <div className="hp-met-fill" style={{ width: `${b}%` }} />
+                {color:'var(--green)',title:'PyDriller extraction',detail:'— full commit history, file diffs, and author metadata'},
+                {color:'var(--ac)',title:'15 metrics per developer',detail:'— file extensions, folder paths, commit keywords'},
+                {color:'var(--amber)',title:'K-Means + PCA',detail:'— clustering resolves ambiguous profiles, PCA maps skill space'},
+              ].map(({color,title,detail}) => (
+                <div key={title} style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:14}}>
+                  <div style={{width:6,height:6,borderRadius:'50%',background:color,flexShrink:0,marginTop:7}}/>
+                  <div style={{fontSize:13,color:'var(--t2)',lineHeight:1.65}}>
+                    <strong style={{color:'var(--t)',fontWeight:600}}>{title}</strong>{' '}{detail}
                   </div>
                 </div>
               ))}
             </div>
+            <div className="hp-term-win">
+              <div className="hp-term-bar">
+                <div className="hp-t-dot" style={{background:'#FF5F56'}}/>
+                <div className="hp-t-dot" style={{background:'#FFBD2E'}}/>
+                <div className="hp-t-dot" style={{background:'#27C93F'}}/>
+                <span className="hp-term-file">analysis.log — pallets/flask</span>
+              </div>
+              <div className="hp-term-body">
+                <span className="hp-tl dim">$ git-analyzer run pallets/flask</span>
+                <span className="hp-tl gray">→ Cloning repository...</span>
+                <span className="hp-tl green">✓ 3,847 commits loaded</span>
+                <span className="hp-tl green">✓ 142 contributors found</span>
+                <span className="hp-tl gray">→ Computing 15 metrics / dev...</span>
+                <span className="hp-tl blue">{'  '}gini_coefficient = 0.74</span>
+                <span className="hp-tl amber">{'  '}⚠ bus_factor = 2 (critical)</span>
+                <span className="hp-tl gray">→ Detecting developer roles...</span>
+                <span className="hp-tl green">✓ Backend: 38 · Generalist: 24</span>
+                <span className="hp-tl green">✓ Tester: 8 · DevOps: 9</span>
+                <span className="hp-tl gray">→ Running K-Means + PCA...</span>
+                <span className="hp-tl green">✓ Dashboard ready in 4.2s</span>
+                <span className="hp-tl bright">{'  '}<span className="hp-cursor"/></span>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* FOOTER CTA */}
-        <div className="hp-cta">
-          <h2 className="hp-cta-t">Ready to analyze your repository?</h2>
-          <p className="hp-cta-s">Paste a URL and get a full breakdown in under a minute.</p>
-          <form onSubmit={handleSubmit}>
-            <div className="hp-cta-bar">
-              <input
-                type="text"
-                value={repoUrl}
-                onChange={e => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/your/repo"
-                disabled={loading}
-              />
-              <button type="submit" disabled={loading} className="hp-bar-btn">
-                {loading ? 'Analyzing…' : 'Get started →'}
-              </button>
-            </div>
-            {error && <p className="hp-err" style={{ marginTop: 10, textAlign: 'left' }}>{error}</p>}
-          </form>
+      {/* ══ METRICS ══ */}
+      <div className="hp-divider"/>
+      <section className="hp-section alt" id="hp-metrics">
+        <div className="hp-inner">
+          <div className="hp-reveal">
+            <div className="hp-s-label">Sample output</div>
+            <div className="hp-s-title">What you will see</div>
+            <div className="hp-s-sub">Real metrics from <span style={{fontFamily:'var(--mono)',color:'var(--ac)',fontSize:13}}>pallets/flask</span>.</div>
+          </div>
+          <div className="hp-mets hp-reveal">
+            {METRICS.map(({label,val,sub,bar,cls}) => (
+              <div className="hp-mc" key={label}>
+                <div className="hp-mc-label">{label}</div>
+                <div className={`hp-mc-val${cls?' '+cls:''}`}>{val}</div>
+                <div className="hp-mc-sub">{sub}</div>
+                <div className="hp-mc-bar">
+                  <div className={`hp-mc-fill${cls&&cls!=='mono'?' '+cls:''}`} style={{width:`${bar}%`}}/>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      </section>
 
-        {/* PAGE FOOTER */}
-        <footer className="hp-foot">
-          <span>git·analyzer · built with PyDriller + Flask + React</span>
-          <span>PFE 2025</span>
-        </footer>
-
-        {loading && <Loader message="Analyzing repository… please wait" />}
+      {/* ══ CTA ══ */}
+      <div className="hp-cta hp-reveal">
+        <h2 className="hp-cta-h">Ready to analyze your repository?</h2>
+        <p className="hp-cta-sub">Paste a URL and get a full breakdown in under a minute.</p>
+        <form onSubmit={handleSubmit}>
+          <div className="hp-cta-bar">
+            <input className="hp-cta-input" type="text" value={repoUrl} onChange={e=>setRepoUrl(e.target.value)} placeholder="https://github.com/your/repo" disabled={loading}/>
+            <button type="submit" className="hp-cta-btn" disabled={loading}>{loading?'Analyzing…':'Get started →'}</button>
+          </div>
+          {error && <div className="hp-err" style={{marginTop:10,textAlign:'center'}}>{error}</div>}
+        </form>
       </div>
 
-      <FadeObserver />
+      {/* ══ FOOTER ══ */}
+      <footer className="hp-footer">
+        <div className="hp-footer-logo">git<span>·</span>analyzer</div>
+        <div className="hp-footer-stack">Built with PyDriller · Flask · React</div>
+        <div className="hp-footer-year">PFE 2025</div>
+      </footer>
+
+      {loading && <Loader message="Analyzing repository… please wait"/>}
     </>
   )
 }

@@ -11,7 +11,6 @@ from pydriller import Repository
 from utils.metrics import (
     compute_gini,
     compute_lorenz,
-    compute_bus_factor,
     compute_kci,
     compute_in_degree,
     compute_risk_score,
@@ -251,7 +250,6 @@ def compute_metrics(repo_path, df_commits, df_files):
     
     gini_value = compute_gini(dev_activity.values)
     lorenz_data = compute_lorenz(dev_activity)
-    bus_factor = compute_bus_factor(dev_activity)
     
     inter_commit = compute_inter_commit_time(df_commits)
     
@@ -269,6 +267,14 @@ def compute_metrics(repo_path, df_commits, df_files):
     
     risk_data = compute_risk_score(kci_data, in_degree_data)
     busfactor_simulation = simulate_bus_factor_risk(ownership_results, line_counts)
+    
+    # Derive bus_factor from line-ownership simulation (consistent with charts)
+    simulation_steps = busfactor_simulation.get("simulation", [])
+    bus_factor = len(simulation_steps)  # fallback: all developers
+    for step in simulation_steps:
+        if step["knowledge_lost"] >= 0.5:
+            bus_factor = step["removed"]
+            break
     
     summary = {
         "total_commits": int(df_commits["commit_hash"].nunique()),
