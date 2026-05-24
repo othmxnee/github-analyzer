@@ -7,18 +7,22 @@ import {
   Title,
   Tooltip
 } from 'chart.js'
+import { useChartColors } from '../../hooks/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip)
 
 function PageRankTable({ data }) {
+  const { grid, tick, muted } = useChartColors()
+
   if (!data || data.length === 0) {
-    return <p style={{ color: '#9ca3af' }}>No in-degree data available</p>
+    return <p style={{ color: 'var(--t3)' }}>No in-degree data available</p>
   }
 
   const sortedData = [...data].sort((a, b) => b.in_degree - a.in_degree).slice(0, 10)
+  const fullPaths = sortedData.map(d => d.file)
 
   const chartData = {
-    labels: sortedData.map(d => d.file.length > 35 ? d.file.substring(0, 35) + '...' : d.file),
+    labels: sortedData.map(d => d.file.length > 35 ? '…' + d.file.slice(-33) : d.file),
     datasets: [
       {
         label: 'In-Degree',
@@ -34,22 +38,27 @@ function PageRankTable({ data }) {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false }
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: (items) => fullPaths[items[0].dataIndex] || items[0].label,
+        }
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-        ticks: { color: '#9ca3af' },
+        grid: { color: grid },
+        ticks: { color: tick },
         title: {
           display: true,
           text: 'In-Degree',
-          color: '#9ca3af'
+          color: tick
         }
       },
       x: {
         grid: { display: false },
-        ticks: { color: '#9ca3af' }
+        ticks: { color: tick }
       }
     }
   }
@@ -62,7 +71,7 @@ function PageRankTable({ data }) {
       <p style={{
         marginTop: '12px',
         fontSize: '0.8rem',
-        color: '#6b7280',
+        color: muted,
         fontStyle: 'italic'
       }}>
         Higher in-degree indicates architecturally important files with many dependencies.

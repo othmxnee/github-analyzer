@@ -8,17 +8,24 @@ import threading
 
 _cache = {}
 _status = {}
+_commits_cache: dict = {}   # repo_url → pre-built commits_data from main analysis
 
-# All 11 features (original)
+
+def provide_commits_data(repo_url: str, commits_data: list) -> None:
+    """Kept for backward compatibility — no longer used by the main analysis."""
+    pass
+
+
+def invalidate_for_repo(repo_url: str) -> None:
+    """Called by analyzer.start_analysis when a re-analysis is triggered,
+    so skills re-runs with fresh full-history data instead of returning stale cache."""
+    _commits_cache.pop(repo_url, None)
+    _status.pop(repo_url, None)
+    _cache.pop(repo_url, None)
+
 FEATURE_COLS = [
     'pct_frontend', 'pct_backend', 'pct_test', 'pct_devops',
     'pct_docs', 'pct_build',
-    'kw_frontend', 'kw_backend', 'kw_test', 'kw_devops', 'kw_docs'
-]
-
-# 9 features — remove noisy ones (pct_docs, pct_build)
-FEATURE_COLS_NO_NOISE = [
-    'pct_frontend', 'pct_backend', 'pct_test', 'pct_devops',
     'kw_frontend', 'kw_backend', 'kw_test', 'kw_devops', 'kw_docs'
 ]
 
@@ -109,7 +116,6 @@ def _compute_umap_2d(rows, feature_cols):
     try:
         import umap
     except ImportError:
-        # Fallback to PCA if umap not installed
         return _compute_pca_2d(rows, feature_cols, key_x='umap_x', key_y='umap_y')
 
     if len(rows) < 4:
@@ -138,13 +144,33 @@ def _compute_umap_2d(rows, feature_cols):
     return rows
 
 
+_KW_STOP = {
+    'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+    'from','as','is','are','was','were','be','been','this','that','it','its',
+    'not','no','so','than','then','when','where','which','who','what','how',
+    'also','into','can','now','just','after','some','all','more','other','will',
+    'via','etc','per','use','used','using','get','set','new','make','its','too',
+    'our','has','had','have','did','been','their','them','they','we','you','your',
+}
+
+
 def _run_analysis(repo_url):
     try:
         _status[repo_url] = 'running'
 
-        # Step 1: collect commits
+        # Step 1: full-history traversal (no commit limit) so all contributors are captured.
+        # Also collect dates and messages for first/last commit and keyword extraction.
+        import re as _re
+        from collections import Counter, defaultdict
+
         commits_data = []
+        dates_by_dev = defaultdict(list)
+        msgs_by_dev = defaultdict(list)
+
         for commit in Repository(repo_url).traverse_commits():
+            email = (commit.author.email or '').strip().lower()
+            if not email:
+                continue
             modified_files = []
             for f in commit.modified_files:
                 path = f.new_path or f.old_path
@@ -154,10 +180,13 @@ def _run_analysis(repo_url):
                     'deleted': f.deleted_lines or 0,
                 })
             commits_data.append({
-                'author_email': commit.author.email,
+                'author_email': email,
                 'message': commit.msg,
                 'modified_files': modified_files,
             })
+            dates_by_dev[email].append(commit.author_date)
+            if commit.msg:
+                msgs_by_dev[email].append(commit.msg)
 
         # Step 2: compute metrics
         rows = compute_skill_metrics(commits_data)
@@ -171,19 +200,39 @@ def _run_analysis(repo_url):
             _status[repo_url] = 'done'
             return
 
+        # Enrich each row with first/last commit dates and top keywords from full history.
+        def _fmt_date(d):
+            if d is None:
+                return None
+            if hasattr(d, 'date'):
+                return str(d.date())
+            try:
+                import datetime
+                return str(d)[:10]
+            except Exception:
+                return None
+
+        for row in rows:
+            dev = row['developer']
+            dates = sorted(dates_by_dev.get(dev, []))
+            row['first_commit'] = _fmt_date(dates[0]) if dates else None
+            row['last_commit'] = _fmt_date(dates[-1]) if dates else None
+            words = []
+            for msg in msgs_by_dev.get(dev, []):
+                tokens = _re.findall(r'[a-z][a-z0-9]{2,}', msg.lower())
+                words.extend(t for t in tokens if t not in _KW_STOP)
+            row['top_keywords'] = [w for w, _ in Counter(words).most_common(8)]
+
         # Step 3: clustering (uses all features)
         rows = _run_clustering(rows)
 
         # Step 4: resolve Generalists using clustering
         rows, cluster_dominant = _resolve_generalists(rows)
 
-        # Step 5a: PCA with all features (original)
+        # Step 5a: PCA with all features
         rows = _compute_pca_2d(rows, FEATURE_COLS, key_x='pca_x', key_y='pca_y')
 
-        # Step 5b: PCA without noisy features (pct_docs, pct_build removed)
-        rows = _compute_pca_2d(rows, FEATURE_COLS_NO_NOISE, key_x='pca_no_noise_x', key_y='pca_no_noise_y')
-
-        # Step 5c: UMAP with all features
+        # Step 5b: UMAP with all features
         rows = _compute_umap_2d(rows, FEATURE_COLS)
 
         # Step 6: role distribution summary

@@ -7,18 +7,22 @@ import {
   Title,
   Tooltip
 } from 'chart.js'
+import { useChartColors } from '../../hooks/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip)
 
 function KCITable({ data }) {
+  const { grid, tick, muted } = useChartColors()
+
   if (!data || data.length === 0) {
-    return <p style={{ color: '#9ca3af' }}>No KCI data available</p>
+    return <p style={{ color: 'var(--t3)' }}>No KCI data available</p>
   }
 
   const sortedData = [...data].sort((a, b) => b.kci - a.kci).slice(0, 10)
+  const fullPaths = sortedData.map(d => d.file)
 
   const chartData = {
-    labels: sortedData.map(d => d.file.length > 35 ? d.file.substring(0, 35) + '...' : d.file),
+    labels: sortedData.map(d => d.file.length > 35 ? '…' + d.file.slice(-33) : d.file),
     datasets: [
       {
         label: 'KCI (%)',
@@ -34,20 +38,25 @@ function KCITable({ data }) {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false }
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: (items) => fullPaths[items[0].dataIndex] || items[0].label,
+        }
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+        grid: { color: grid },
         ticks: {
-          color: '#9ca3af',
+          color: tick,
           callback: value => `${value}%`
         }
       },
       x: {
         grid: { display: false },
-        ticks: { color: '#9ca3af' }
+        ticks: { color: tick }
       }
     }
   }
@@ -60,7 +69,7 @@ function KCITable({ data }) {
       <p style={{
         marginTop: '12px',
         fontSize: '0.8rem',
-        color: '#6b7280',
+        color: muted,
         fontStyle: 'italic'
       }}>
         KCI = Knowledge Concentration Index. Higher values indicate concentrated ownership.

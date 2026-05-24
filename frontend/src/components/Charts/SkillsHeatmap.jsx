@@ -16,12 +16,16 @@ const ROLE_COLORS = {
 }
 
 function heatColor(value) {
-  // white → orange → red
+  // transparent tint → orange → solid red
+  // Using rgba means 0% cells show as a subtle tint on whatever the background is,
+  // so it works correctly in both dark and light mode without harsh white boxes.
   const v = Math.min(1, Math.max(0, value))
-  const r = Math.round(255)
-  const g = Math.round(255 * (1 - v * 0.85))
-  const b = Math.round(255 * (1 - v))
-  return `rgb(${r},${g},${b})`
+  const alpha = Math.max(0.10, v)          // min 10% so 0% cells still have a visible tint
+  const g     = Math.round(65 * (1 - v))  // fades from orange-ish to pure red
+  return {
+    bg:   `rgba(220, ${g}, 0, ${alpha.toFixed(2)})`,
+    text: v >= 0.40 ? '#fff' : 'var(--t)',  // var(--t) = theme text color (white in dark, dark in light)
+  }
 }
 
 export default function SkillsHeatmap({ developers }) {
@@ -92,13 +96,14 @@ export default function SkillsHeatmap({ developers }) {
                 {/* Skill cells */}
                 {SKILLS.map(s => {
                   const val = dev[s.key] || 0
+                  const { bg, text } = heatColor(val)
                   return (
                     <td key={s.key}
                         title={`${s.label}: ${(val * 100).toFixed(1)}%`}
                         style={{
-                          background: heatColor(val),
+                          background: bg,
                           textAlign: 'center',
-                          color: val > 0.5 ? '#fff' : '#333',
+                          color: text,
                           fontWeight: 600,
                           fontSize: 11,
                           padding: '4px 2px',

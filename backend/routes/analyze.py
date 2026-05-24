@@ -26,8 +26,8 @@ def analyze():
         repo_url = data['repo_url']
         if not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid GitHub URL'}), 400
-
-        return jsonify(start_analysis(repo_url))
+        force = bool(data.get('force', False))
+        return jsonify(start_analysis(repo_url, force=force))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

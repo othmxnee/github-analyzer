@@ -46,31 +46,34 @@ def compute_bus_factor(dev_activity):
     return int(bus_factor)
 
 
+def normalize_path(path: str) -> str:
+    """Normalize a repo-relative path so KCI, in-degree, and risk keys all match."""
+    p = str(path).replace("\\", "/").strip().lstrip("./").strip("/")
+    while "//" in p:
+        p = p.replace("//", "/")
+    if p.startswith("src/"):
+        p = p[4:]
+    return p
+
+
 def compute_kci(df_files, repo_root):
     file_ids = df_files["file_id"].dropna().unique().tolist()
-    
+
     line_counts = {}
     ownership_results = {}
-    
+
     for file_id in file_ids:
-        # Try the direct path first, then common variants
         abs_path = repo_root / file_id
         if not abs_path.exists():
-            # Try stripping leading src/
             stripped = str(file_id).lstrip("./")
             if stripped.startswith("src/"):
                 stripped = stripped[4:]
             abs_path = repo_root / stripped
             if not abs_path.exists():
                 continue
-            file_id = stripped  # use the working path as key
+            file_id = stripped
 
-        # Normalize the key so it always matches voronoi/treemap paths
-        norm_key = str(file_id).replace("\\", "/").strip().lstrip("./").strip("/")
-        while "//" in norm_key:
-            norm_key = norm_key.replace("//", "/")
-        if norm_key.startswith("src/"):
-            norm_key = norm_key[4:]
+        norm_key = normalize_path(file_id)
 
         try:
             output = subprocess.check_output(
@@ -350,6 +353,183 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
                 target = module_to_file(module_name)
                 if target:
                     graph.add_edge(file_id, target)
+
+    # ── JS / TS ───────────────────────────────────────────────────────────
+    js_exts = [".ts", ".tsx", ".js", ".jsx", ".mjs"]
+    js_like_files = []
+    for ext in js_exts:
+        for p in repo_root.rglob(f"*{ext}"):
+            try:
+                rel = p.relative_to(repo_root)
+            except ValueError:
+                continue
+            if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+                continue
+            js_like_files.append(p)
+
+    _js_res_exts = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+    js_import_re = re.compile(r'(?:import\s+[^;]*?from\s+|import\s*\(|require\s*\()\s*["\']([^"\']+)["\']')
+
+    def _resolve_js(from_path, spec):
+        if not spec or not spec.startswith("."):
+            return None
+        base = (repo_root / from_path).parent
+        candidate = (base / spec).resolve()
+        if candidate.is_file():
+            try:
+                return str(candidate.relative_to(repo_root))
+            except ValueError:
+                return None
+        for ext in _js_res_exts:
+            for target in [candidate.with_suffix(ext), candidate / f"index{ext}"]:
+                if target.is_file():
+                    try:
+                        return str(target.relative_to(repo_root))
+                    except ValueError:
+                        return None
+        return None
+
+    for p in js_like_files:
+        try:
+            file_id = str(p.relative_to(repo_root))
+            graph.add_node(file_id)
+            content = p.read_text(encoding="utf8", errors="ignore")
+            for match in js_import_re.findall(content):
+                target = _resolve_js(file_id, match)
+                if target:
+                    graph.add_edge(file_id, target)
+        except Exception:
+            continue
+
+    # ── Java ─────────────────────────────────────────────────────────────
+    java_files = []
+    for p in repo_root.rglob("*.java"):
+        try:
+            rel = p.relative_to(repo_root)
+        except ValueError:
+            continue
+        if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+            continue
+        java_files.append(p)
+
+    if java_files:
+        java_index: dict[str, str] = {}
+        for p in java_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                graph.add_node(file_id)
+                key = ".".join(p.relative_to(repo_root).with_suffix("").parts)
+                java_index[key] = file_id
+                java_index.setdefault(p.stem, file_id)
+            except ValueError:
+                pass
+        java_imp_re = re.compile(r'^import\s+(?:static\s+)?([\w.]+?)(?:\.\*)?;', re.MULTILINE)
+        for p in java_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                content = p.read_text(encoding="utf8", errors="ignore")
+                for m in java_imp_re.finditer(content):
+                    target = java_index.get(m.group(1))
+                    if target and target != file_id:
+                        graph.add_edge(file_id, target)
+            except Exception:
+                pass
+
+    # ── Go ────────────────────────────────────────────────────────────────
+    go_files = []
+    for p in repo_root.rglob("*.go"):
+        try:
+            rel = p.relative_to(repo_root)
+        except ValueError:
+            continue
+        if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+            continue
+        go_files.append(p)
+
+    if go_files:
+        go_dir_files: dict[str, list[str]] = {}
+        for p in go_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                graph.add_node(file_id)
+                dir_key = str(p.parent.relative_to(repo_root))
+                go_dir_files.setdefault(dir_key, []).append(file_id)
+            except ValueError:
+                pass
+        go_rel_re = re.compile(r'"(\./[^"]+|\.\.\/[^"]+)"')
+        for p in go_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                content = p.read_text(encoding="utf8", errors="ignore")
+                for m in go_rel_re.finditer(content):
+                    target_dir = (p.parent / m.group(1)).resolve()
+                    try:
+                        dir_rel = str(target_dir.relative_to(repo_root))
+                        for tf in go_dir_files.get(dir_rel, [])[:1]:
+                            graph.add_edge(file_id, tf)
+                    except ValueError:
+                        pass
+            except Exception:
+                pass
+
+    # ── Rust ─────────────────────────────────────────────────────────────
+    rust_files = []
+    for p in repo_root.rglob("*.rs"):
+        try:
+            rel = p.relative_to(repo_root)
+        except ValueError:
+            continue
+        if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+            continue
+        rust_files.append(p)
+
+    if rust_files:
+        rust_mod_re = re.compile(r'^(?:pub\s+)?mod\s+(\w+)\s*;', re.MULTILINE)
+        for p in rust_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                graph.add_node(file_id)
+                content = p.read_text(encoding="utf8", errors="ignore")
+                for m in rust_mod_re.finditer(content):
+                    mod_name = m.group(1)
+                    for candidate in [p.parent / f"{mod_name}.rs", p.parent / mod_name / "mod.rs"]:
+                        if candidate.exists():
+                            try:
+                                graph.add_edge(file_id, str(candidate.relative_to(repo_root)))
+                            except ValueError:
+                                pass
+                            break
+            except Exception:
+                pass
+
+    # ── C / C++ ──────────────────────────────────────────────────────────
+    c_files = []
+    for ext in ["*.c", "*.cpp", "*.cc", "*.cxx", "*.h", "*.hpp"]:
+        for p in repo_root.rglob(ext):
+            try:
+                rel = p.relative_to(repo_root)
+            except ValueError:
+                continue
+            if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+                continue
+            c_files.append(p)
+
+    if c_files:
+        c_inc_re = re.compile(r'^#include\s+"([^"]+)"', re.MULTILINE)
+        for p in c_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                graph.add_node(file_id)
+                content = p.read_text(encoding="utf8", errors="ignore")
+                for m in c_inc_re.finditer(content):
+                    candidate = (p.parent / m.group(1)).resolve()
+                    if candidate.exists():
+                        try:
+                            graph.add_edge(file_id, str(candidate.relative_to(repo_root)))
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
 
     if graph.number_of_nodes() == 0:
         return {"nodes": [], "edges": []}

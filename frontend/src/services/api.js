@@ -2,10 +2,11 @@ import axios from 'axios'
 
 const API_URL = 'http://localhost:5000'
 
-export const startRepoAnalysis = async (repoUrl) => {
+export const startRepoAnalysis = async (repoUrl, force = false) => {
   try {
     const response = await axios.post(`${API_URL}/analyze`, {
-      repo_url: repoUrl
+      repo_url: repoUrl,
+      ...(force ? { force: true } : {}),
     })
     return response.data
   } catch (error) {

@@ -53,7 +53,7 @@ THRESHOLDS = {
 CATEGORIES = ['frontend', 'backend_py', 'backend_java',
               'backend_js', 'mobile', 'test', 'devops', 'build', 'docs', 'other']
 
-MIN_COMMITS = 5  # ignore occasional contributors
+MIN_COMMITS = 2  # minimum commits to assign a role
 
 
 def get_file_category(filepath):
@@ -182,13 +182,13 @@ def compute_skill_metrics(commits_data):
             continue
 
         total_lines = sum(lines_by_category[dev].values())
-        if total_lines == 0:
-            continue
-
         n_commits = total_commits[dev]
 
-        # Percentages per category
-        pct = {cat: lines_by_category[dev][cat] / total_lines for cat in CATEGORIES}
+        # Percentages per category (safe divide — fall back to keyword-only if no line data)
+        if total_lines > 0:
+            pct = {cat: lines_by_category[dev][cat] / total_lines for cat in CATEGORIES}
+        else:
+            pct = {cat: 0.0 for cat in CATEGORIES}
 
         # Combined backend
         pct_backend = pct['backend_py'] + pct['backend_java'] + pct['backend_js']

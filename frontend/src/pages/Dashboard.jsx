@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, Component } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopDevelopersChart from '../components/Charts/TopDevelopersChart'
 import TimelineChart from '../components/Charts/TimelineChart'
@@ -15,9 +15,10 @@ import OwnershipPlots from '../components/Charts/OwnershipPlots'
 import CommitFrequencyChart from '../components/Charts/CommitFrequencyChart'
 import ArchitectureGraph from '../components/Charts/ArchitectureGraph'
 import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisualization'
-import ProjectRiskSummary from '../components/Charts/ProjectRiskSummary'
+import ProjectRiskSummary, { downloadPDF } from '../components/Charts/ProjectRiskSummary'
 import RepositoryTreemap from '../components/Charts/RepositoryTreemap'
 import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
+import DevelopersList from '../components/Charts/DevelopersList'
 import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
 import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
 import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
@@ -57,6 +58,12 @@ const Icon = {
       <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
     </svg>
   ),
+  Refresh: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+    </svg>
+  ),
   Overview: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
@@ -72,6 +79,12 @@ const Icon = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  ),
+  Developers: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/>
+      <path d="M16 3.13a4 4 0 010 7.75"/><path d="M21 21v-2a4 4 0 00-3-3.87"/>
     </svg>
   ),
   Knowledge: () => (
@@ -124,6 +137,24 @@ function SectionHead({ eyebrow, title, sub }) {
 }
 
 /* ─────────────────────────────────────────
+   ERROR BOUNDARY
+───────────────────────────────────────── */
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: '14px', color: 'var(--red)', fontSize: 12, fontFamily: 'var(--mono)' }}>
+          Chart unavailable — {this.state.error.message}
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+/* ─────────────────────────────────────────
    CHART CARD COMPONENT
 ───────────────────────────────────────── */
 function ChartCard({ title, sub, children }) {
@@ -134,7 +165,7 @@ function ChartCard({ title, sub, children }) {
         {sub && <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>{sub}</span>}
       </div>
       <div style={{ padding: '18px' }}>
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </div>
     </div>
   )
@@ -163,6 +194,7 @@ const NAV_SECTIONS = [
   { id: 'hotspots',     label: 'Hotspots',          Icon: Icon.Hotspots,      badge: 'amber' },
   { id: 'architecture', label: 'Architecture',      Icon: Icon.Architecture,  badge: null },
   { id: 'roles',        label: 'Developer Roles',   Icon: Icon.Roles,         badge: null },
+  { id: 'developers',   label: 'Developers',        Icon: Icon.Developers,    badge: null },
 ]
 
 /* ─────────────────────────────────────────
@@ -196,57 +228,52 @@ export default function Dashboard() {
     setRepoUrl(url || '')
   }, [navigate])
 
-  /* ── fetch skills ── */
+  /* ── fetch skills (lazy: only starts when user first visits "Developer Roles") ── */
+  const skillsStarted = useRef(false)
   useEffect(() => {
-    if (!repoUrl) return
+    if (!repoUrl || (activeSection !== 'roles' && activeSection !== 'developers') || skillsStarted.current) return
+    skillsStarted.current = true
     setSkillsLoading(true)
     setSkillsError(null)
-    fetch('http://localhost:5000/analyze/skills', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: repoUrl }),
-    })
-    const interval = setInterval(() => {
+
+    let interval = null
+    let cancelled = false
+
+    const pollOnce = () =>
       fetch(`http://localhost:5000/analyze/skills/result?repo_url=${encodeURIComponent(repoUrl)}`)
         .then(r => r.json())
         .then(data => {
-          if (data.status === 'done')  { setSkillsData(data); setSkillsLoading(false); clearInterval(interval) }
-          if (data.status === 'error') { setSkillsError(data.error); setSkillsLoading(false); clearInterval(interval) }
+          if (cancelled) return false
+          if (data.status === 'done')  { setSkillsData(data);        setSkillsLoading(false); return true }
+          if (data.status === 'error') { setSkillsError(data.error); setSkillsLoading(false); return true }
+          return false
         })
-        .catch(err => { setSkillsError(err.message); setSkillsLoading(false); clearInterval(interval) })
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [repoUrl])
+        .catch(() => false)
 
-  /* ── patch heatmap white text after render ── */
-  useEffect(() => {
-    if (activeSection !== 'roles') return
-    const timer = setTimeout(() => {
-      // Find all elements with white/near-white inline color inside the heatmap
-      const main = document.getElementById('dash-main-scroll')
-      if (!main) return
-      main.querySelectorAll('*').forEach(el => {
-        const s = el.style
-        const c = s.color?.toLowerCase()
-        if (
-          c === 'white' || c === '#fff' || c === '#ffffff' ||
-          c === 'rgb(255, 255, 255)' || c === 'rgb(255,255,255)'
-        ) {
-          el.style.color = '#0C0E1A'
-          el.style.fontWeight = '700'
-        }
-        // Also patch SVG fill
-        const f = s.fill?.toLowerCase()
-        if (
-          f === 'white' || f === '#fff' || f === '#ffffff' ||
-          f === 'rgb(255, 255, 255)' || f === 'rgb(255,255,255)'
-        ) {
-          el.style.fill = '#0C0E1A'
-        }
-      })
-    }, 800)
-    return () => clearTimeout(timer)
-  }, [activeSection, skillsData])
+    const run = async () => {
+      // Kick off backend job — idempotent, returns immediately if already done/running
+      await fetch('http://localhost:5000/analyze/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: repoUrl }),
+      }).catch(() => {})
+
+      if (cancelled) return
+      // First poll immediately — shows cached result on re-visit without any wait
+      const done = await pollOnce()
+      if (done) return
+
+      interval = setInterval(async () => {
+        const finished = await pollOnce()
+        if (finished && interval) clearInterval(interval)
+      }, 5000)
+    }
+
+    run().catch(err => { if (!cancelled) { setSkillsError(err.message); setSkillsLoading(false) } })
+
+    return () => { cancelled = true; if (interval) clearInterval(interval) }
+  }, [repoUrl, activeSection])
+
   const toggleTheme = useCallback(() => {
     setIsLight(v => {
       const next = !v
@@ -342,35 +369,37 @@ export default function Dashboard() {
         sub="Who contributes, how often, and how consistently"
       />
 
-      {/* Timeline — full width */}
-      <ChartCard title="Activity Timeline" sub="Monthly commit volume">
-        <TimelineChart data={timeline} />
-      </ChartCard>
-
-      {/* 3 charts side by side */}
-      <div className="grid-3">
-        <ChartCard title="Top Developers by Commits">
-          <TopDevelopersChart data={top_developers} />
-        </ChartCard>
-        <ChartCard title="Contribution Inequality (Lorenz Curve)">
-          <LorenzChart data={lorenz} gini={gini} />
+      {/* Row 1 — Timeline (wider) + Inter-Commit (narrower) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--gap-card)' }}>
+        <ChartCard title="Activity Timeline" sub="Monthly commit volume">
+          <TimelineChart data={timeline} />
         </ChartCard>
         <ChartCard title="Inter-Commit Time (Days)">
           <InterCommitTable data={inter_commit} />
         </ChartCard>
       </div>
 
-      {/* Commit frequency — full width */}
+      {/* Row 2 — Lorenz + Top Developers filling the row equally */}
+      <div className="grid-2">
+        <ChartCard title="Contribution Inequality (Lorenz Curve)">
+          <LorenzChart data={lorenz} gini={gini} />
+        </ChartCard>
+        <ChartCard title="Top Developers by Commits">
+          <TopDevelopersChart data={top_developers} />
+        </ChartCard>
+      </div>
+
+      {/* Row 3 — Commit frequency full width */}
       <ChartCard title="Developer Activity Over Time">
         <CommitFrequencyChart data={commit_frequency} />
       </ChartCard>
 
-      {/* Dev mods timeline — full width */}
+      {/* Row 4 — Dev mods timeline full width */}
       <ChartCard title="Top Developers by File Modifications">
         <TopDevModsChart data={top_devs_mods} />
       </ChartCard>
 
-      {/* Heatmap — full width */}
+      {/* Row 5 — Heatmap full width */}
       <ChartCard title="Developer–File Activity Heatmap">
         <ActivityHeatmap data={dev_file_matrix} />
       </ChartCard>
@@ -505,6 +534,7 @@ export default function Dashboard() {
     hotspots:     renderHotspots,
     architecture: renderArchitecture,
     roles:        renderRoles,
+    developers:   null,  // rendered inline below (needs full-height layout)
   }
 
   /* ── date range from timeline ── */
@@ -547,7 +577,26 @@ export default function Dashboard() {
             <Icon.GitHub />
             View on GitHub
           </a>
-          <button className="dash-pdf-btn">
+          <button
+            className="dash-reanalyze-btn"
+            onClick={() => {
+              sessionStorage.removeItem('analysisResults')
+              navigate('/', { state: { repoUrl, autoSubmit: true } })
+            }}
+          >
+            <Icon.Refresh />
+            Re-analyze
+          </button>
+          <button
+            className="dash-pdf-btn"
+            onClick={() => downloadPDF(
+              project_summary.health_score,
+              project_summary.risk_level,
+              project_summary.insights || [],
+              project_summary.recommendations || [],
+              project_summary.dimensions || {}
+            )}
+          >
             <Icon.Download />
             PDF Report
           </button>
@@ -619,8 +668,12 @@ export default function Dashboard() {
         <main
           id="dash-main-scroll"
           className="dash-main"
+          style={activeSection === 'developers' ? { padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : {}}
         >
-          {(sectionMap[activeSection] || renderOverview)()}
+          {activeSection === 'developers'
+            ? <DevelopersList results={results} skillsData={skillsData} skillsLoading={skillsLoading} />
+            : (sectionMap[activeSection] || renderOverview)()
+          }
         </main>
       </div>
     </>

@@ -1,9 +1,12 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import traceback
+from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +20,15 @@ from utils.metrics import (
     build_dependency_graph,
     simulate_bus_factor_risk,
     generate_project_summary,
+    normalize_path,
+)
+
+MAX_COMMITS = 2000
+
+_BOT_SUBSTRINGS = {"dependabot", "github-actions", "[bot]", "renovate", "noreply"}
+_BOT_WORD_RE = re.compile(
+    r'(?<![a-z0-9])(bot|ci|automation|build)(?![a-z0-9])',
+    re.IGNORECASE,
 )
 from utils.treemap import build_treemap_data
 from utils.voronoi_treemap import build_voronoi_data
@@ -24,55 +36,94 @@ from utils.voronoi_treemap import build_voronoi_data
 
 _ANALYSIS_CACHE = {}
 _ANALYSIS_STATUS = {}
+_ANALYSIS_PHASE = {}        # repo_url -> current phase string while running
+_ANALYSIS_TIMESTAMPS = {}   # repo_url -> unix timestamp of last completed analysis
 _LAST_REPO_URL = None
 
+CACHE_TTL = 30 * 60        # 30 minutes — auto-rerun after this on next request
+CACHE_MAX_AGE = 24 * 3600  # 24 hours  — hard eviction (frees memory)
 
-def analyze_repo(repo_url: str):
+
+def _evict_stale_entries():
+    """Remove entries older than CACHE_MAX_AGE. Called lazily on each new analysis."""
+    cutoff = time.time() - CACHE_MAX_AGE
+    stale = [url for url, ts in list(_ANALYSIS_TIMESTAMPS.items()) if ts < cutoff]
+    for url in stale:
+        _ANALYSIS_CACHE.pop(url, None)
+        _ANALYSIS_STATUS.pop(url, None)
+        _ANALYSIS_PHASE.pop(url, None)
+        _ANALYSIS_TIMESTAMPS.pop(url, None)
+
+
+
+
+def _run_analysis(repo_url: str):
     global _LAST_REPO_URL
     tmp_dir = tempfile.mkdtemp()
-    
     try:
-        subprocess.run(
-            ["git", "clone", repo_url, tmp_dir],
-            check=True,
-            capture_output=True
-        )
+        _ANALYSIS_STATUS[repo_url] = 'running'
 
+        _ANALYSIS_PHASE[repo_url] = 'cloning'
+        result = subprocess.run(
+            ["git", "clone", repo_url, tmp_dir],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if 'not found' in stderr.lower() or 'repository not found' in stderr.lower():
+                raise ValueError(f"Repository not found: {repo_url}")
+            if 'rate limit' in stderr.lower():
+                raise ValueError("GitHub rate limit reached. Wait a few minutes and try again.")
+            if 'could not resolve host' in stderr.lower() or 'unable to access' in stderr.lower():
+                raise ValueError("Network error: could not reach GitHub. Check your connection.")
+            raise ValueError(f"git clone failed: {stderr or f'exit code {result.returncode}'}")
+
+        _ANALYSIS_PHASE[repo_url] = 'extracting'
         commits_data, file_modifications = extract_data(tmp_dir)
+
+        _ANALYSIS_PHASE[repo_url] = 'cleaning'
         df_commits, df_files = clean_data(commits_data, file_modifications)
-        results = compute_metrics(tmp_dir, df_commits, df_files)
+
+        _ANALYSIS_PHASE[repo_url] = 'computing'
+        results = compute_metrics(tmp_dir, df_commits, df_files, commits_data)
+
         _ANALYSIS_CACHE[repo_url] = results
         _LAST_REPO_URL = repo_url
-        
-        return results
-        
+        _ANALYSIS_TIMESTAMPS[repo_url] = time.time()
+        _ANALYSIS_STATUS[repo_url] = 'done'
+        _ANALYSIS_PHASE.pop(repo_url, None)
+    except Exception as exc:
+        _ANALYSIS_STATUS[repo_url] = 'error'
+        _ANALYSIS_PHASE.pop(repo_url, None)
+        _ANALYSIS_CACHE[repo_url] = {
+            'error': str(exc),
+            'trace': traceback.format_exc(),
+        }
     finally:
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
 
 
-def _run_analysis(repo_url: str):
-    global _LAST_REPO_URL
+def start_analysis(repo_url: str, force: bool = False):
+    _evict_stale_entries()
 
-    try:
-        _ANALYSIS_STATUS[repo_url] = 'running'
-        results = analyze_repo(repo_url)
-        _ANALYSIS_CACHE[repo_url] = results
-        _LAST_REPO_URL = repo_url
-        _ANALYSIS_STATUS[repo_url] = 'done'
-    except Exception as exc:
-        _ANALYSIS_STATUS[repo_url] = 'error'
-        _ANALYSIS_CACHE[repo_url] = {
-            'error': str(exc),
-            'trace': traceback.format_exc(),
-        }
-
-
-def start_analysis(repo_url: str):
     status = _ANALYSIS_STATUS.get(repo_url)
 
+    if status != 'running':
+        # Honour force flag or auto-expire after TTL
+        ts = _ANALYSIS_TIMESTAMPS.get(repo_url, 0)
+        if force or (status == 'done' and time.time() - ts > CACHE_TTL):
+            _ANALYSIS_STATUS.pop(repo_url, None)
+            _ANALYSIS_CACHE.pop(repo_url, None)
+            _ANALYSIS_TIMESTAMPS.pop(repo_url, None)
+            status = None
+            # Invalidate skills cache so it re-runs from scratch on next request
+            from services.skill_service import invalidate_for_repo
+            invalidate_for_repo(repo_url)
+
     if status == 'done':
-        return {'status': 'done'}
+        return {'status': 'done', 'analyzed_at': _ANALYSIS_TIMESTAMPS.get(repo_url)}
 
     if status != 'running':
         thread = threading.Thread(target=_run_analysis, args=(repo_url,), daemon=True)
@@ -85,7 +136,11 @@ def get_analysis_result(repo_url: str):
     status = _ANALYSIS_STATUS.get(repo_url, 'not_started')
 
     if status == 'done':
-        return {'status': 'done', **_ANALYSIS_CACHE[repo_url]}
+        return {
+            'status': 'done',
+            'analyzed_at': _ANALYSIS_TIMESTAMPS.get(repo_url),
+            **_ANALYSIS_CACHE[repo_url],
+        }
 
     if status == 'error':
         cached = _ANALYSIS_CACHE.get(repo_url, {})
@@ -95,7 +150,7 @@ def get_analysis_result(repo_url: str):
             'trace': cached.get('trace'),
         }
 
-    return {'status': status}
+    return {'status': status, 'phase': _ANALYSIS_PHASE.get(repo_url, 'starting')}
 
 
 def extract_data(repo_path: str):
@@ -104,7 +159,27 @@ def extract_data(repo_path: str):
     developers = set()
     project_start = None
     project_end = None
-    for commit in Repository(repo_path).traverse_commits():
+
+    # Limit to MAX_COMMITS most-recent commits to keep analysis fast
+    only_commits = None
+    try:
+        count_out = subprocess.run(
+            ["git", "-C", repo_path, "rev-list", "--count", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        total = int(count_out.stdout.strip())
+        if total > MAX_COMMITS:
+            hash_out = subprocess.run(
+                ["git", "-C", repo_path, "log", f"--max-count={MAX_COMMITS}", "--format=%H"],
+                capture_output=True, text=True, check=True,
+            )
+            only_commits = [h.strip() for h in hash_out.stdout.strip().splitlines() if h.strip()]
+    except Exception:
+        pass
+
+    repo_iter = Repository(repo_path, only_commits=only_commits) if only_commits else Repository(repo_path)
+
+    for commit in repo_iter.traverse_commits():
         
         if project_start is None or commit.author_date < project_start:
             project_start = commit.author_date
@@ -170,14 +245,11 @@ def clean_data(commits_data, file_modifications, code_extensions=None):
     df_files = df_files[df_files["developer_id"].notna()]
     df_commits = df_commits[df_commits["developer_id"].notna()]
     
-    bot_keywords = [
-        "bot", "dependabot", "github-actions",
-        "ci", "automation", "build"
-    ]
-    
     def is_bot(dev):
         name = str(dev).lower()
-        return any(k in name for k in bot_keywords)
+        if any(s in name for s in _BOT_SUBSTRINGS):
+            return True
+        return bool(_BOT_WORD_RE.search(name))
     
     bot_mask = df_commits["developer_id"].apply(is_bot)
     bots = df_commits.loc[bot_mask, "developer_id"].unique()
@@ -220,12 +292,100 @@ def clean_data(commits_data, file_modifications, code_extensions=None):
 
 def _default_extensions():
     return [
-        "py", "js", "ts", "java", "c", "cpp",
-        "go", "rs", "php", "rb", "cs"
+        "py", "js", "ts", "tsx", "jsx",
+        "java", "kt", "scala",
+        "c", "cpp", "cc", "cxx", "h", "hpp",
+        "go", "rs", "php", "rb", "cs",
+        "vue", "svelte", "swift", "dart",
     ]
 
 
-def compute_metrics(repo_path, df_commits, df_files):
+_KW_STOP = {
+    'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+    'from','as','is','are','was','were','be','been','this','that','it','its',
+    'not','no','so','than','then','when','where','which','who','what','how',
+    'also','into','can','now','just','after','some','all','more','other','will',
+    'via','etc','per','use','used','using','get','set','new','make','its','too',
+    'our','has','had','have','did','been','their','them','they','we','you','your',
+}
+
+
+def _compute_dev_stats(commits_data_raw, df_files):
+    """Per-developer statistics.
+
+    Uses raw (pre-clean) commits for dates and keywords so that merge-commit-only
+    and devops-only contributors are not excluded. Uses code-filtered df_files
+    for modification counts (which are extension-specific by design).
+    """
+    from collections import Counter, defaultdict
+    import re as _re
+
+    # Bot detection — same rules as clean_data
+    def _is_bot(email):
+        e = str(email).lower()
+        if any(s in e for s in _BOT_SUBSTRINGS):
+            return True
+        return bool(_BOT_WORD_RE.search(e))
+
+    # Aggregate dates, messages, and commit counts from raw commits
+    # (includes merges and all file types — gives full picture for all contributors)
+    dates_by_dev  = defaultdict(list)
+    msgs_by_dev   = defaultdict(list)
+    commit_counts = Counter()
+    for c in commits_data_raw:
+        email = str(c.get('author_email', '') or '').strip().lower()
+        if not email or email == 'none' or _is_bot(email):
+            continue
+        commit_counts[email] += 1
+        d = c.get('author_date')
+        if d is not None:
+            dates_by_dev[email].append(d)
+        msg = c.get('message', '')
+        if msg:
+            msgs_by_dev[email].append(msg)
+
+    # Modification counts from code-filtered df_files
+    _angle_re = _re.compile(r'<(.+?)>')
+    def _email_from_dev_id(dev_id):
+        m = _angle_re.search(str(dev_id))
+        return m.group(1) if m else str(dev_id)
+
+    df_files_norm = df_files.copy()
+    df_files_norm["developer_id"] = df_files_norm["developer_id"].apply(_email_from_dev_id)
+    mod_count  = df_files_norm.groupby("developer_id").size()
+    uniq_files = df_files_norm.groupby("developer_id")["file_id"].nunique()
+
+    def _fmt_date(d):
+        if d is None:
+            return None
+        if hasattr(d, 'date'):
+            return str(d.date())
+        try:
+            return str(pd.to_datetime(str(d)).date())
+        except Exception:
+            return None
+
+    stats = {}
+    all_devs = set(dates_by_dev) | set(mod_count.index) | set(uniq_files.index)
+    for dev in all_devs:
+        dates = sorted(dates_by_dev.get(dev, []))
+        words = []
+        for msg in msgs_by_dev.get(dev, []):
+            tokens = _re.findall(r'[a-z][a-z0-9]{2,}', msg.lower())
+            words.extend(t for t in tokens if t not in _KW_STOP)
+        top_kw = [w for w, _ in Counter(words).most_common(8)]
+        stats[dev] = {
+            "first_commit":        _fmt_date(dates[0])  if dates else None,
+            "last_commit":         _fmt_date(dates[-1]) if dates else None,
+            "total_modifications": int(mod_count.get(dev, 0)),
+            "unique_files":        int(uniq_files.get(dev, 0)),
+            "top_keywords":        top_kw,
+            "total_commits_raw":   int(commit_counts.get(dev, 0)),
+        }
+    return stats
+
+
+def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
     df_files = df_files.copy()
     df_commits = df_commits.copy()
     
@@ -254,16 +414,38 @@ def compute_metrics(repo_path, df_commits, df_files):
     inter_commit = compute_inter_commit_time(df_commits)
     
     kci_data, line_counts, ownership_results = compute_kci(df_files, repo_root)
-    
+
+    # git blame uses author names, but all other data is keyed by email.
+    # Build name→email from df_commits and normalize ownership_results.
+    _name_to_email = {}
+    for _, row in df_commits[['author_name', 'developer_id']].drop_duplicates().iterrows():
+        name = str(row.get('author_name', '')).strip().lower()
+        email = str(row['developer_id'])  # already lowercase email after clean_data
+        if name and '@' in email:
+            _name_to_email[name] = email
+
+    def _norm_blame_owners(owners):
+        result = {}
+        for author, share in owners.items():
+            key = _name_to_email.get(author.lower(), author.lower())
+            result[key] = result.get(key, 0.0) + share
+        return result
+
+    ownership_results = {f: _norm_blame_owners(owners) for f, owners in ownership_results.items()}
+
     architecture_data = build_dependency_graph(repo_root)
     treemap_data = build_treemap_data(df_files)
     voronoi_data = build_voronoi_data(df_files, architecture_data, kci_data, ownership_results, repo_root)
+    # Normalize paths so they match KCI keys (both strip leading src/)
     in_degree_data = {
-        node["id"]: node["degree"]
+        normalize_path(node["id"]): node["degree"]
         for node in architecture_data.get("nodes", [])
     }
     if not in_degree_data:
-        in_degree_data = compute_in_degree(repo_root)
+        in_degree_data = {
+            normalize_path(k): v
+            for k, v in compute_in_degree(repo_root).items()
+        }
     
     risk_data = compute_risk_score(kci_data, in_degree_data)
     busfactor_simulation = simulate_bus_factor_risk(ownership_results, line_counts)
@@ -346,7 +528,14 @@ def compute_metrics(repo_path, df_commits, df_files):
             })
     
     ownership_plots = []
-    files_to_plot = list(ownership_results.keys())[:5]
+    # Sort by KCI (highest concentration first), then by line count as tiebreaker.
+    # ownership_results keys come from git blame traversal in insertion order —
+    # that order is meaningless. We want the files where knowledge is most concentrated.
+    files_to_plot = sorted(
+        ownership_results.keys(),
+        key=lambda f: (kci_data.get(f, 0.0), line_counts.get(f, 0)),
+        reverse=True,
+    )[:5]
     for file in files_to_plot:
         owners = ownership_results.get(file, {})
         if not owners:
@@ -368,8 +557,8 @@ def compute_metrics(repo_path, df_commits, df_files):
             aggfunc="sum",
             fill_value=0
         )
-        top_dev_ids = dev_activity.head(15).index
-        top_file_ids = file_hotspots.head(20).index
+        top_dev_ids = dev_activity.head(30).index
+        top_file_ids = file_hotspots.head(30).index
         submatrix = matrix.reindex(index=top_dev_ids, columns=top_file_ids, fill_value=0)
         dev_file_matrix = {
             "developers": list(submatrix.index),
@@ -378,6 +567,7 @@ def compute_metrics(repo_path, df_commits, df_files):
         }
 
     commit_frequency = compute_developer_activity_over_time(df_files)
+    dev_stats = _compute_dev_stats(commits_data_raw or [], df_files)
 
     return {
         "summary": summary,
@@ -401,6 +591,7 @@ def compute_metrics(repo_path, df_commits, df_files):
         "voronoi": voronoi_data,
         "busfactor_simulation": busfactor_simulation,
         "project_summary": project_summary,
+        "dev_stats": dev_stats,
     }
 
 
@@ -416,15 +607,13 @@ def compute_inter_commit_time(df_commits):
     )
     
     commit_counts = commits_sorted["developer_id"].value_counts()
-    active_devs = commit_counts[commit_counts >= 50].index
-    
+    active_devs = commit_counts[commit_counts >= 3].index
+
     filtered = commits_sorted[commits_sorted["developer_id"].isin(active_devs)]
-    
+
     ict = filtered[filtered["delta_days"] > 0].groupby("developer_id")["delta_days"].median()
-    
-    return {
-        dev: float(days) for dev, days in ict.sort_values().head(30).items()
-    }
+
+    return {dev: float(days) for dev, days in ict.items()}
 
 
 def compute_developer_activity_over_time(df_files, top_n=5):
@@ -456,9 +645,11 @@ def compute_developer_activity_over_time(df_files, top_n=5):
 
 def _resolve_analysis(repo_url=None):
     if repo_url:
-        if repo_url in _ANALYSIS_CACHE:
+        if _ANALYSIS_STATUS.get(repo_url) == 'done' and repo_url in _ANALYSIS_CACHE:
             return _ANALYSIS_CACHE[repo_url]
-        return analyze_repo(repo_url)
+        raise ValueError(
+            f"No completed analysis for '{repo_url}'. POST /analyze and wait for status=done."
+        )
 
     if _LAST_REPO_URL and _LAST_REPO_URL in _ANALYSIS_CACHE:
         return _ANALYSIS_CACHE[_LAST_REPO_URL]

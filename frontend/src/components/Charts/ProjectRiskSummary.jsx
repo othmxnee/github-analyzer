@@ -34,7 +34,7 @@ function DimensionBar({ label, score }) {
   )
 }
 
-async function downloadPDF(score, level, insights, recommendations, dimensions) {
+export async function downloadPDF(score, level, insights, recommendations, dimensions) {
   if (!window.jspdf) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script")

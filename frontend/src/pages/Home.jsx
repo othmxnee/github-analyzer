@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { getRepoAnalysisResult, startRepoAnalysis } from '../services/api'
-import Loader from '../components/Loader'
 import '../styles/Home.css'
 
 /* ═════════════════════════════════════════
@@ -165,16 +164,49 @@ const METRICS = [
 /* ═════════════════════════════════════════
    HOME
 ═════════════════════════════════════════ */
+const PHASES = [
+  { key: 'cloning',    label: 'Cloning repository' },
+  { key: 'extracting', label: 'Extracting history'  },
+  { key: 'cleaning',   label: 'Cleaning data'       },
+  { key: 'computing',  label: 'Computing metrics'   },
+]
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('repoHistory') || '[]') } catch { return [] }
+}
+
+function saveHistory(url) {
+  try {
+    const hist = loadHistory()
+    const updated = [url, ...hist.filter(u => u !== url)].slice(0, 5)
+    localStorage.setItem('repoHistory', JSON.stringify(updated))
+  } catch {}
+}
+
 export default function Home() {
-  const [repoUrl, setRepoUrl] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [isLight, setIsLight] = useState(false)
+  const [repoUrl, setRepoUrl]           = useState('')
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
+  const [isLight, setIsLight]           = useState(false)
+  const [phase, setPhase]               = useState('cloning')
+  const [repoHistory, setRepoHistory]   = useState(loadHistory)
   const navigate = useNavigate()
+  const location = useLocation()
   useReveal()
 
   const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior:'smooth' })
-  const wait     = ms => new Promise(r => setTimeout(r, ms))
+  const wait     = ms => new Promise(r => setTimeout(r, ms))  // eslint-disable-line
+
+  /* ── auto-submit when coming back from Dashboard "Re-analyze" ── */
+  useEffect(() => {
+    const state = location.state
+    if (!state?.repoUrl) return
+    setRepoUrl(state.repoUrl)
+    if (state.autoSubmit) {
+      handleSubmit(null, state.repoUrl, true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const toggleTheme = useCallback(() => {
     setIsLight(v => {
@@ -185,25 +217,52 @@ export default function Home() {
     })
   }, [])
 
-  const handleSubmit = async (e, fallbackUrl) => {
+  const handleSubmit = async (e, fallbackUrl, force = false) => {
     e?.preventDefault()
     const url = fallbackUrl || repoUrl
     setError('')
     if (!url.trim())                { setError('Please enter a GitHub repository URL'); return }
     if (!url.includes('github.com')){ setError('Please enter a valid GitHub URL');      return }
     setLoading(true)
+    setPhase('cloning')
     try {
-      const start = await startRepoAnalysis(url)
+      const start = await startRepoAnalysis(url, force)
       if (start.error) throw new Error(start.error)
       let results = null
       while (true) {
         const data = await getRepoAnalysisResult(url)
         if (data.status === 'done')  { results = data; break }
         if (data.status === 'error') throw new Error(data.error || 'Analysis failed')
+        if (data.phase) setPhase(data.phase)
         await wait(5000)
       }
-      sessionStorage.setItem('analysisResults', JSON.stringify(results))
-      sessionStorage.setItem('repoUrl', url)
+      try {
+        sessionStorage.setItem('analysisResults', JSON.stringify(results))
+        sessionStorage.setItem('repoUrl', url)
+      } catch (storageErr) {
+        // sessionStorage quota exceeded (large repo) — store a trimmed version
+        const trimmed = {
+          ...results,
+          ownership_table: (results.ownership_table || []).slice(0, 200),
+          dev_file_matrix: { developers: [], files: [], values: [] },
+        }
+        try {
+          sessionStorage.setItem('analysisResults', JSON.stringify(trimmed))
+          sessionStorage.setItem('repoUrl', url)
+        } catch {
+          setError('Repository data is too large to display in the browser. Try a smaller repository.')
+          setLoading(false)
+          return
+        }
+      }
+      saveHistory(url)
+      setRepoHistory(loadHistory())
+      // Kick off skills analysis in the background so it's ready when user clicks the tab
+      fetch('http://localhost:5000/analyze/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: url }),
+      }).catch(() => {})
       navigate('/dashboard')
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Unknown error'
@@ -254,35 +313,81 @@ export default function Home() {
           </p>
 
           <div className="hp-island" id="hp-input">
-            <div className="hp-island-label">Analyze a repository</div>
-            <form onSubmit={handleSubmit}>
-              <div className="hp-input-row">
-                <div className="hp-prompt">&gt;</div>
-                <input
-                  className="hp-input"
-                  type="text"
-                  value={repoUrl}
-                  onChange={e => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/pallets/flask"
-                  disabled={loading}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button type="submit" className="hp-submit" disabled={loading}>
-                  {loading ? 'Analyzing…' : 'Analyze →'}
-                </button>
+            <div className="hp-island-label">
+              {loading ? 'Analyzing repository' : 'Analyze a repository'}
+            </div>
+
+            {loading ? (
+              <div className="hp-progress">
+                <div className="hp-progress-url">{repoUrl}</div>
+                <div className="hp-progress-steps">
+                  {PHASES.map((p, i) => {
+                    const currentIdx = PHASES.findIndex(ph => ph.key === phase)
+                    const isDone   = i < currentIdx
+                    const isActive = i === currentIdx
+                    return (
+                      <div key={p.key} className={`hp-pstep${isActive ? ' active' : isDone ? ' done' : ''}`}>
+                        <div className="hp-pstep-icon">
+                          {isDone   ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          : isActive ? <div className="hp-pstep-spin"/>
+                          : null}
+                        </div>
+                        <span>{p.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-              {error && <div className="hp-err">{error}</div>}
-            </form>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                <div className="hp-input-row">
+                  <div className="hp-prompt">&gt;</div>
+                  <input
+                    className="hp-input"
+                    type="text"
+                    value={repoUrl}
+                    onChange={e => setRepoUrl(e.target.value)}
+                    placeholder="https://github.com/pallets/flask"
+                    disabled={loading}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button type="submit" className="hp-submit" disabled={loading}>
+                    Analyze →
+                  </button>
+                </div>
+                {error && <div className="hp-err">{error}</div>}
+              </form>
+            )}
+
             <div className="hp-island-footer">
-              <div className="hp-pills">
-                {['pallets/flask','django/django','torvalds/linux'].map(r => (
-                  <div key={r} className="hp-pill" onClick={() => setRepoUrl(`https://github.com/${r}`)}>
-                    {r}
+              {repoHistory.length > 0 && !loading && (
+                <div className="hp-history">
+                  <span className="hp-history-label">Recent</span>
+                  <div className="hp-pills">
+                    {repoHistory.map(u => {
+                      const short = u.replace('https://github.com/', '')
+                      return (
+                        <div key={u} className="hp-pill hp-pill-history" onClick={() => setRepoUrl(u)} title={u}>
+                          {short}
+                        </div>
+                      )
+                    })}
                   </div>
-                ))}
-              </div>
-              <div className="hp-note">No auth required</div>
+                </div>
+              )}
+              {!loading && (
+                <div className="hp-footer-row">
+                  <div className="hp-pills">
+                    {['pallets/flask','django/django','torvalds/linux'].map(r => (
+                      <div key={r} className="hp-pill" onClick={() => setRepoUrl(`https://github.com/${r}`)}>
+                        {r}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hp-note">No auth required</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -490,7 +595,6 @@ export default function Home() {
         <div className="hp-footer-year">PFE 2025</div>
       </footer>
 
-      {loading && <Loader message="Analyzing repository… please wait"/>}
     </>
   )
 }

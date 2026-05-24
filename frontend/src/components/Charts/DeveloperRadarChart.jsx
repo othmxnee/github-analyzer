@@ -18,13 +18,17 @@ const AXES = [
   { key: 'pct_backend',  label: 'Backend'  },
   { key: 'pct_test',     label: 'Test'     },
   { key: 'pct_devops',   label: 'DevOps'   },
+  { key: 'pct_mobile',   label: 'Mobile'   },
   { key: 'pct_docs',     label: 'Docs'     },
 ]
+
+const FLOOR = 4  // minimum value so the shape is never an invisible needle
 
 function buildRadarData(dev) {
   return AXES.map(a => ({
     skill: a.label,
-    value: Math.round((dev[a.key] || 0) * 100),
+    value: Math.max(FLOOR, Math.round((dev[a.key] || 0) * 100)),
+    raw:   Math.round((dev[a.key] || 0) * 100),  // shown in tooltip
   }))
 }
 
@@ -91,24 +95,33 @@ export default function DeveloperRadarChart({ developers }) {
       </div>
 
       {/* Radar chart */}
-      <ResponsiveContainer width="100%" height={300}>
-        <RadarChart data={radarData}>
+      <ResponsiveContainer width="100%" height={340}>
+        <RadarChart data={radarData} outerRadius={110}>
           <PolarGrid stroke="var(--color-border)" />
-          <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--color-text)', fontSize: 13 }} />
-          <PolarRadiusAxis angle={30} domain={[0, 100]}
-                           tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }} />
+          <PolarAngleAxis
+            dataKey="skill"
+            tick={{ fill: 'var(--color-text)', fontSize: 13, fontWeight: 600 }}
+          />
+          <PolarRadiusAxis
+            angle={30}
+            domain={[0, 100]}
+            tick={{ fill: 'var(--color-text-muted)', fontSize: 9 }}
+            tickCount={4}
+          />
           <Radar
             name={shortName}
             dataKey="value"
             stroke={roleColor}
+            strokeWidth={2.5}
             fill={roleColor}
-            fillOpacity={0.35}
+            fillOpacity={0.45}
+            dot={{ r: 4, fill: roleColor, strokeWidth: 0 }}
           />
           <Tooltip
-            formatter={(v) => `${v}%`}
-            contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-            labelStyle={{ color: 'var(--color-text)' }}
-            itemStyle={{ color: 'var(--color-text)' }}
+            formatter={(v, _name, props) => [`${props.payload.raw}%`, 'Contribution']}
+            contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6 }}
+            labelStyle={{ color: 'var(--color-text)', fontWeight: 600 }}
+            itemStyle={{ color: roleColor }}
           />
           <Legend wrapperStyle={{ color: 'var(--color-text)', fontSize: 12 }} />
         </RadarChart>

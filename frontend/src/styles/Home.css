@@ -181,8 +181,12 @@ body.lm .hp-island {
 .hp-submit:disabled { opacity: .5; cursor: not-allowed; }
 
 .hp-island-footer {
+  margin-top: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.hp-footer-row {
   display: flex; align-items: center;
-  justify-content: space-between; margin-top: 12px; gap: 8px;
+  justify-content: space-between; gap: 8px;
 }
 .hp-pills { display: flex; gap: 7px; flex-wrap: wrap; }
 .hp-pill {
@@ -193,6 +197,55 @@ body.lm .hp-island {
   transition: background .2s;
 }
 .hp-pill:hover { background: rgba(59,110,234,0.22); }
+
+/* History row */
+.hp-history { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hp-history-label {
+  font-size: 9px; color: var(--t3);
+  text-transform: uppercase; letter-spacing: .12em;
+  font-weight: 700; white-space: nowrap;
+}
+.hp-pill-history {
+  background: var(--bg3) !important;
+  border-color: var(--b) !important;
+  color: var(--t2) !important;
+  max-width: 180px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.hp-pill-history:hover { background: var(--surf2) !important; color: var(--t) !important; }
+
+/* Analysis phase progress */
+.hp-progress { padding: 8px 0 4px; }
+.hp-progress-url {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--t3); margin-bottom: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hp-progress-steps {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hp-pstep {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--t3);
+  font-family: var(--f); transition: color .3s;
+}
+.hp-pstep.done  { color: var(--green, #00C896); }
+.hp-pstep.active { color: var(--t); }
+.hp-pstep-icon {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid currentColor;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 9px; color: inherit;
+}
+.hp-pstep.done .hp-pstep-icon  { background: var(--green, #00C896); border-color: var(--green, #00C896); color: #fff; }
+.hp-pstep.active .hp-pstep-icon { border-color: var(--ac); }
+.hp-pstep-spin {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 2px solid var(--ac-b);
+  border-top-color: var(--ac);
+  animation: hpSpin .8s linear infinite;
+}
+@keyframes hpSpin { to { transform: rotate(360deg); } }
 
 .hp-note { font-size: 10px; color: var(--t3); white-space: nowrap; }
 .hp-err {

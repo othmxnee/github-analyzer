@@ -10,6 +10,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
+import { useChartColors } from '../../hooks/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
@@ -20,17 +21,22 @@ function riskBand(percent) {
 }
 
 function BusFactorRiskVisualization({ data }) {
+  const { grid, tick, legend } = useChartColors()
   const developers = data?.developers || []
   const simulation = data?.simulation || []
 
   if (developers.length === 0 || simulation.length === 0) {
-    return <p style={{ color: '#9ca3af' }}>No bus factor simulation data available</p>
+    return <p style={{ color: 'var(--t3)' }}>No bus factor simulation data available</p>
   }
 
   const topDevelopers = developers.slice(0, 10)
-  const twoRemoved = simulation.find(item => item.removed === 2) || simulation[Math.min(1, simulation.length - 1)]
-  const twoRemovedPct = twoRemoved ? twoRemoved.knowledge_lost * 100 : 0
-  const twoRemovedBand = riskBand(twoRemovedPct)
+
+  // Find the step where cumulative knowledge loss first reaches 50% — that's the bus factor
+  const busFactorStep = simulation.find(item => item.knowledge_lost >= 0.5)
+    || simulation[simulation.length - 1]
+  const busFactorN = busFactorStep ? busFactorStep.removed : simulation.length
+  const busFactorPct = busFactorStep ? busFactorStep.knowledge_lost * 100 : 100
+  const busFactorBand = riskBand(busFactorPct)
 
   const ownershipData = {
     labels: topDevelopers.map(d => d.name),
@@ -62,16 +68,16 @@ function BusFactorRiskVisualization({ data }) {
   const sharedOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#9ca3af' } } },
+    plugins: { legend: { labels: { color: legend } } },
     scales: {
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(255,255,255,0.1)' },
-        ticks: { color: '#9ca3af' }
+        grid: { color: grid },
+        ticks: { color: tick }
       },
       x: {
         grid: { display: false },
-        ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 20 }
+        ticks: { color: tick, maxRotation: 45, minRotation: 20 }
       }
     }
   }
@@ -94,9 +100,11 @@ function BusFactorRiskVisualization({ data }) {
       </div>
 
       <p className="busfactor-insight">
-        Removing the top 2 developers would remove{' '}
-        <strong style={{ color: twoRemovedBand.color }}>{twoRemovedPct.toFixed(1)}%</strong>{' '}
-        of project knowledge ({twoRemovedBand.label}).
+        Bus factor:{' '}
+        <strong style={{ color: busFactorBand.color }}>{busFactorN}</strong>
+        {' '}— removing these {busFactorN} developer{busFactorN !== 1 ? 's' : ''} would eliminate{' '}
+        <strong style={{ color: busFactorBand.color }}>{busFactorPct.toFixed(1)}%</strong>{' '}
+        of project knowledge ({busFactorBand.label}).
       </p>
       <div className="risk-legend">
         <span><i style={{ background: '#22c55e' }} /> &lt; 30% = safe</span>

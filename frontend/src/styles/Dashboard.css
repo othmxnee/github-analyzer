@@ -101,6 +101,17 @@ body.lm .dash-topbar { background: rgba(239,241,247,0.94); }
 .dash-gh-btn:hover { border-color: var(--bs); color: var(--t); }
 .dash-gh-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 
+.dash-reanalyze-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--t2); font-weight: 500;
+  padding: 6px 12px; border: 1px solid var(--b); border-radius: 6px;
+  background: transparent; cursor: pointer;
+  font-family: var(--f); transition: border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.dash-reanalyze-btn:hover { border-color: var(--bs); color: var(--t); }
+.dash-reanalyze-btn svg { width: 12px; height: 12px; }
+
 .dash-pdf-btn {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px; color: #fff; font-weight: 600;
