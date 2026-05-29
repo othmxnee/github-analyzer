@@ -1,0 +1,462 @@
+/* ============================================
+   TIMELINE FEATURE - selector, delta badges, card chrome
+   ============================================ */
+
+/* ── Selector ── */
+.tl-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  font-family: var(--f);
+}
+
+.tl-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--b);
+  background: var(--surf);
+  color: var(--t);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--f);
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.tl-pill:hover {
+  background: var(--surf2);
+  border-color: var(--bs);
+}
+.tl-pill--open {
+  background: var(--ac-d);
+  border-color: var(--ac-b);
+  color: var(--ac);
+}
+.tl-pill-label {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--b);
+  background: var(--surf);
+  color: var(--t2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  user-select: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tl-compare:hover {
+  background: var(--surf2);
+  border-color: var(--bs);
+  color: var(--t);
+}
+.tl-compare input {
+  display: none;
+}
+.tl-compare--on {
+  background: var(--ac-d);
+  border-color: var(--ac-b);
+  color: var(--ac);
+}
+.tl-compare--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tl-compare-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+}
+.tl-compare-group .tl-compare {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.tl-mode {
+  position: relative;
+  display: inline-flex;
+}
+.tl-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--ac-b);
+  background: var(--ac-d);
+  color: var(--ac);
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--f);
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tl-mode-pill:hover {
+  background: var(--surf2);
+}
+.tl-mode-pill--open {
+  background: var(--bg3);
+}
+.tl-mode-prefix {
+  opacity: 0.7;
+  font-weight: 400;
+}
+.tl-mode-label {
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-pop--mode {
+  min-width: 260px;
+}
+.tl-pop-item--mode {
+  display: block;
+  padding: 8px;
+}
+.tl-pop-item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tl-pop-item-hint {
+  font-size: 10px;
+  color: var(--t3);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.tl-pop-item--mode.tl-pop-item--active .tl-pop-item-hint {
+  color: var(--ac);
+  opacity: 0.8;
+}
+
+.tl-strip-prev strong {
+  color: var(--t);
+  font-weight: 600;
+  font-family: var(--mono);
+}
+
+/* ── Popover ── */
+.tl-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  min-width: 220px;
+  background: var(--bg2);
+  border: 1px solid var(--bs);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+  font-family: var(--f);
+}
+
+.tl-pop-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t3);
+  padding: 6px 8px 4px;
+  font-weight: 600;
+}
+
+.tl-pop-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  color: var(--t);
+  font-family: var(--f);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+.tl-pop-item:hover {
+  background: var(--surf);
+}
+.tl-pop-item--active {
+  background: var(--ac-d);
+  color: var(--ac);
+}
+.tl-pop-check {
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.tl-pop-divider {
+  height: 1px;
+  background: var(--b);
+  margin: 4px 0;
+}
+
+.tl-pop-custom {
+  padding: 6px 8px 8px;
+}
+.tl-pop-custom-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t3);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.tl-pop-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--t2);
+  margin-bottom: 8px;
+}
+.tl-pop-custom-row input[type="date"] {
+  background: var(--bg);
+  border: 1px solid var(--b);
+  color: var(--t);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: var(--mono);
+  flex: 1;
+  min-width: 0;
+  color-scheme: dark;
+}
+:root[data-theme='light'] .tl-pop-custom-row input[type="date"],
+body.lm .tl-pop-custom-row input[type="date"] {
+  color-scheme: light;
+}
+.tl-pop-apply {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--ac);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-family: var(--f);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tl-pop-apply:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.tl-pop-apply:disabled {
+  background: var(--surf2);
+  color: var(--t3);
+  cursor: not-allowed;
+}
+
+/* ── Delta badge ── */
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  line-height: 1.4;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.delta-badge--md {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.delta-badge-arrow {
+  font-size: 1.1em;
+  line-height: 1;
+}
+.delta-badge--good {
+  background: var(--green-d);
+  color: var(--green);
+}
+.delta-badge--bad {
+  background: var(--red-d);
+  color: var(--red);
+}
+.delta-badge--flat {
+  background: var(--surf);
+  color: var(--t3);
+}
+.delta-badge--neutral {
+  background: var(--surf);
+  color: var(--t2);
+}
+.delta-badge--new {
+  background: var(--ac-d);
+  color: var(--ac);
+}
+
+/* ── Card chrome ── */
+.tl-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tl-card-title-text {
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  color: var(--t) !important;
+  display: inline !important;
+}
+.tl-card-sub {
+  font-size: 10px;
+  color: var(--t3);
+  font-family: var(--mono);
+}
+.tl-card-controls {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Aggregate strip below header ── */
+.tl-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  background: var(--surf);
+  border-top: 1px solid var(--b);
+  border-bottom: 1px solid var(--b);
+  font-size: 11px;
+  color: var(--t2);
+  flex-wrap: wrap;
+}
+.tl-strip-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tl-strip-num {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--t);
+  letter-spacing: -0.01em;
+}
+.tl-strip-lbl {
+  color: var(--t2);
+  font-size: 11px;
+}
+.tl-strip-prev {
+  color: var(--t3);
+  font-size: 10px;
+  font-family: var(--mono);
+}
+.tl-strip-warn {
+  color: var(--amber);
+  font-size: 10px;
+  margin-left: auto;
+  font-family: var(--mono);
+}
+
+/* ── Loading + empty overlays ── */
+.tl-loader-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 15, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  z-index: 10;
+  pointer-events: none;
+}
+:root[data-theme='light'] .tl-loader-overlay,
+body.lm .tl-loader-overlay {
+  background: rgba(239, 241, 247, 0.55);
+}
+.tl-loader-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ac-b);
+  border-top-color: var(--ac);
+  border-radius: 50%;
+  animation: tl-spin 0.7s linear infinite;
+}
+@keyframes tl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.tl-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  color: var(--t2);
+  font-size: 12px;
+  border-radius: var(--r);
+  padding: 20px;
+  text-align: center;
+}
+
+/* ── Compare list (per-item deltas) ── */
+.tl-compare-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--surf);
+  border: 1px solid var(--b);
+  border-radius: var(--r);
+  max-height: 240px;
+  overflow: auto;
+}
+.tl-compare-list-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t3);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.tl-compare-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 11px;
+  padding: 3px 0;
+}
+.tl-compare-row-name {
+  color: var(--t);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+.tl-compare-row-val {
+  font-family: var(--mono);
+  color: var(--t2);
+  text-align: right;
+}

@@ -34,97 +34,405 @@ function DimensionBar({ label, score }) {
   )
 }
 
-export async function downloadPDF(score, level, insights, recommendations, dimensions) {
-  if (!window.jspdf) {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script")
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-      script.onload = resolve
-      script.onerror = reject
-      document.head.appendChild(script)
-    })
-  }
+/* ────────────────────────────────────────────────────────────────────
+   PDF generator — Repository Health Report
+   Layout: cover + sections, modern typography, severity colors,
+   consistent spacing, page footer with page numbers.
+──────────────────────────────────────────────────────────────────── */
 
-  const { jsPDF } = window.jspdf
+const PDF_COLORS = {
+  ink:        [17, 24, 39],
+  body:       [55, 65, 81],
+  muted:      [120, 125, 138],
+  line:       [228, 230, 236],
+  surface:    [247, 248, 251],
+  brand:      [30, 58, 95],
+  brandLight: [44, 78, 122],
+  green:      [22, 163, 74],
+  amber:      [217, 119, 6],
+  red:        [220, 38, 38],
+  dark:       [153, 27, 27],
+}
+
+const scoreColorPDF = (s) =>
+  s >= 80 ? PDF_COLORS.green
+  : s >= 60 ? PDF_COLORS.amber
+  : s >= 40 ? PDF_COLORS.red
+  : PDF_COLORS.dark
+
+const sevColorPDF = (sev) =>
+  sev === "high"     ? PDF_COLORS.red
+  : sev === "moderate" ? PDF_COLORS.amber
+  : sev === "ok"     ? PDF_COLORS.green
+  : PDF_COLORS.muted
+
+async function loadJsPDF() {
+  if (window.jspdf) return window.jspdf
+  await new Promise((resolve, reject) => {
+    const script = document.createElement("script")
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+    script.onload = resolve
+    script.onerror = reject
+    document.head.appendChild(script)
+  })
+  return window.jspdf
+}
+
+export async function downloadPDF(score, level, insights, recommendations, dimensions, extra = {}) {
+  const { jsPDF } = await loadJsPDF()
   const doc = new jsPDF({ unit: "mm", format: "a4" })
-  const W = 210, margin = 18, contentW = W - margin * 2
-  let y = 20
 
-  // Header
-  doc.setFillColor(30, 58, 95)
-  doc.rect(0, 0, 210, 14, "F")
-  doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255)
-  doc.text("Repository Risk Summary", margin, 9.5)
-  doc.setFontSize(8); doc.setFont("helvetica", "normal")
-  doc.text(new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }), W - margin, 9.5, { align: "right" })
+  const W = 210, H = 297
+  const margin = 20
+  const contentW = W - margin * 2
 
-  y = 26
-  const sc = score >= 80 ? [34,197,94] : score >= 60 ? [234,179,8] : score >= 40 ? [239,68,68] : [153,27,27]
-  doc.setFontSize(40); doc.setFont("helvetica", "bold"); doc.setTextColor(...sc)
-  doc.text(String(score), margin, y + 10)
-  doc.setFontSize(13); doc.setTextColor(120,120,120)
-  doc.text("/ 100", margin + 22, y + 10)
-  doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(30,30,30)
-  doc.text("Repository Health Score", margin + 50, y + 4)
-  doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(...sc)
-  doc.text(String(level).toUpperCase() + " RISK", margin + 50, y + 11)
+  const repoSlug = extra.repoSlug || "Repository"
+  const verdict = extra.verdict || ""
+  const activity = extra.activity || {}
+  const languages = extra.languages || {}
+  const findings = extra.findings || []
+  const healthDims = extra.healthDimensions || {}
 
-  y += 24
-  doc.setDrawColor(220,220,220); doc.line(margin, y, W - margin, y); y += 8
+  let y = 0
 
-  // Metric bars
-  doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30,30,30)
-  doc.text("Metrics", margin, y); y += 7
-  const barH = 3, gap = 9
-  for (const [key, val] of Object.entries(dimensions)) {
-    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60,60,60)
-    doc.text(key, margin, y)
-    const fc = val >= 75 ? [34,197,94] : val >= 50 ? [234,179,8] : val >= 25 ? [239,68,68] : [153,27,27]
-    doc.setTextColor(...fc)
-    doc.text(`${val}/100`, W - margin, y, { align: "right" })
-    doc.setFillColor(220,220,220)
-    doc.roundedRect(margin, y + 2, contentW, barH, 1, 1, "F")
-    doc.setFillColor(...fc)
-    doc.roundedRect(margin, y + 2, (val / 100) * contentW, barH, 1, 1, "F")
-    y += gap
+  /* ── helpers ─────────────────────────────────────────────────────── */
+  const setFont = (size, weight = "normal", color = PDF_COLORS.body) => {
+    doc.setFontSize(size)
+    doc.setFont("helvetica", weight)
+    doc.setTextColor(...color)
+  }
+  const ensure = (needed) => {
+    if (y + needed > H - 22) {
+      pageFooter()
+      doc.addPage()
+      pageHeader(false)
+      y = 32
+    }
+  }
+  const hr = () => {
+    doc.setDrawColor(...PDF_COLORS.line)
+    doc.setLineWidth(0.2)
+    doc.line(margin, y, W - margin, y)
+    y += 8
+  }
+  const sectionHead = (label) => {
+    ensure(16)
+    // Vertical brand accent
+    doc.setFillColor(...PDF_COLORS.brand)
+    doc.rect(margin, y - 4.5, 2.5, 7, "F")
+    setFont(11, "bold", PDF_COLORS.ink)
+    doc.text(label, margin + 7, y + 0.5)
+    y += 8
   }
 
-  y += 4; doc.setDrawColor(220,220,220); doc.line(margin, y, W - margin, y); y += 8
+  const pageHeader = (isCover = false) => {
+    // Top accent strip
+    doc.setFillColor(...PDF_COLORS.brand)
+    doc.rect(0, 0, W, 4, "F")
 
-  // Insights
-  doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30,30,30)
-  doc.text("Insights", margin, y); y += 7
-  for (const item of insights) {
-    if (y > 265) { doc.addPage(); y = 20 }
-    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60,60,60)
-    doc.text("•", margin, y)
-    const lines = doc.splitTextToSize(item, contentW - 6)
-    doc.text(lines, margin + 5, y)
-    y += lines.length * 5 + 2
+    if (isCover) return // cover gets a richer treatment below
+
+    // Slim running header
+    setFont(8, "normal", PDF_COLORS.muted)
+    doc.text("Repository Health Report", margin, 12)
+    doc.text(repoSlug, W - margin, 12, { align: "right" })
+    doc.setDrawColor(...PDF_COLORS.line)
+    doc.setLineWidth(0.2)
+    doc.line(margin, 16, W - margin, 16)
   }
 
-  y += 4; doc.line(margin, y, W - margin, y); y += 8
-
-  // Recommendations
-  doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30,30,30)
-  doc.text("Recommendations", margin, y); y += 7
-  for (const item of recommendations) {
-    if (y > 265) { doc.addPage(); y = 20 }
-    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60,60,60)
-    doc.text("•", margin, y)
-    const lines = doc.splitTextToSize(item, contentW - 6)
-    doc.text(lines, margin + 5, y)
-    y += lines.length * 5 + 2
+  const pageFooter = () => {
+    setFont(8, "normal", PDF_COLORS.muted)
+    const pageNum = doc.internal.getNumberOfPages()
+    doc.text("Generated by Repository Analyzer", margin, H - 10)
+    doc.text(
+      new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+      W / 2, H - 10, { align: "center" }
+    )
+    doc.text(`Page ${pageNum}`, W - margin, H - 10, { align: "right" })
   }
 
-  const pageCount = doc.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
+  /* ── COVER PAGE ──────────────────────────────────────────────────── */
+  pageHeader(true)
+
+  // Cover band
+  const bandH = 58
+  doc.setFillColor(...PDF_COLORS.brand)
+  doc.rect(0, 0, W, bandH, "F")
+
+  // Subtle accent shape on the right
+  doc.setFillColor(...PDF_COLORS.brandLight)
+  doc.rect(W - 60, 0, 60, bandH, "F")
+
+  setFont(8, "bold", [180, 200, 220])
+  doc.text("REPOSITORY HEALTH REPORT", margin, 22, { charSpace: 1.4 })
+
+  setFont(22, "bold", [255, 255, 255])
+  doc.text(doc.splitTextToSize(repoSlug, contentW - 60), margin, 36)
+
+  setFont(9.5, "normal", [200, 215, 230])
+  doc.text(
+    new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+    margin, 48
+  )
+
+  /* ── Score panel (left tile + right meta) ───────────────────────── */
+  y = bandH + 14
+  const sc = scoreColorPDF(score)
+  const cardH = 56
+  const tileW = 64
+
+  // Card background
+  doc.setFillColor(...PDF_COLORS.surface)
+  doc.roundedRect(margin, y, contentW, cardH, 5, 5, "F")
+
+  // Left score tile: colored accent stripe + big number with properly placed /100
+  doc.setFillColor(...sc)
+  doc.rect(margin, y, 3, cardH, "F")
+
+  // Measure the score text AT its actual font size so /100 sits next to it correctly
+  const scoreText = String(score)
+  setFont(54, "bold", sc)
+  const scoreW = doc.getTextWidth(scoreText)
+  const scoreBaseline = y + cardH / 2 + 8
+  doc.text(scoreText, margin + 14, scoreBaseline)
+
+  // "/100" — smaller, muted, baseline-aligned to score
+  setFont(13, "normal", PDF_COLORS.muted)
+  doc.text("/ 100", margin + 14 + scoreW + 4, scoreBaseline)
+
+  // Vertical divider between tile and meta
+  doc.setDrawColor(...PDF_COLORS.line)
+  doc.setLineWidth(0.3)
+  doc.line(margin + tileW, y + 8, margin + tileW, y + cardH - 8)
+
+  // Right meta column: HEALTH SCORE label, RISK badge, verdict
+  const metaX = margin + tileW + 10
+  const metaW = contentW - tileW - 14
+
+  setFont(8, "bold", PDF_COLORS.muted)
+  doc.text("HEALTH SCORE", metaX, y + 12, { charSpace: 1 })
+
+  // Risk pill
+  const riskLabel = String(level).toUpperCase() + " RISK"
+  setFont(9, "bold")
+  const pillTextW = doc.getTextWidth(riskLabel)
+  const pillPad = 4
+  const pillX = metaX
+  const pillY = y + 16
+  const pillH = 8
+  doc.setFillColor(...sc)
+  doc.roundedRect(pillX, pillY, pillTextW + pillPad * 2, pillH, 2, 2, "F")
+  setFont(9, "bold", [255, 255, 255])
+  doc.text(riskLabel, pillX + pillPad, pillY + 5.5)
+
+  // Verdict
+  if (verdict) {
+    setFont(10, "normal", PDF_COLORS.body)
+    const verdictLines = doc.splitTextToSize(verdict, metaW)
+    doc.text(verdictLines, metaX, y + 32)
+  }
+
+  y += cardH + 10
+
+  /* ── Identity strip — 4 columns inside a soft card ──────────────── */
+  if (Object.keys(activity).length || languages.primary) {
+    const items = [
+      ["Primary Language", languages.primary || "—"],
+      ["Project Age", activity.project_age_days ? formatAgePDF(activity.project_age_days) : "—"],
+      ["Last Activity", activity.last_commit_days_ago != null ? relativeDaysPDF(activity.last_commit_days_ago) : "—"],
+      ["Active Devs (90d)", activity.active_devs_90d != null ? `${activity.active_devs_90d} / ${activity.total_devs ?? "—"}` : "—"],
+    ]
+    const idH = 22
+    doc.setFillColor(...PDF_COLORS.surface)
+    doc.roundedRect(margin, y, contentW, idH, 4, 4, "F")
+    const colW = contentW / items.length
+    items.forEach(([label, value], i) => {
+      const x = margin + colW * i + 8
+      if (i > 0) {
+        doc.setDrawColor(...PDF_COLORS.line)
+        doc.setLineWidth(0.2)
+        doc.line(margin + colW * i, y + 4, margin + colW * i, y + idH - 4)
+      }
+      setFont(7, "bold", PDF_COLORS.muted)
+      doc.text(label.toUpperCase(), x, y + 8, { charSpace: 0.7 })
+      setFont(11, "bold", PDF_COLORS.ink)
+      doc.text(String(value), x, y + 16)
+    })
+    y += idH + 12
+  }
+
+  /* ── Health Dimensions ───────────────────────────────────────────── */
+  const dimsForReport = Object.keys(healthDims).length ? healthDims : dimensions
+  if (Object.keys(dimsForReport).length) {
+    sectionHead("Health Dimensions")
+    const entries = Object.entries(dimsForReport)
+    for (const [key, val] of entries) {
+      ensure(11)
+      setFont(10, "normal", PDF_COLORS.ink)
+      doc.text(key, margin, y)
+      const fc = scoreColorPDF(val)
+      setFont(10, "bold", fc)
+      doc.text(`${val}/100`, W - margin, y, { align: "right" })
+      doc.setFillColor(...PDF_COLORS.line)
+      doc.roundedRect(margin, y + 2, contentW, 2.5, 1, 1, "F")
+      doc.setFillColor(...fc)
+      doc.roundedRect(margin, y + 2, (val / 100) * contentW, 2.5, 1, 1, "F")
+      y += 10
+    }
+    y += 4
+  }
+
+  /* ── Language Mix ────────────────────────────────────────────────── */
+  if (languages.mix && languages.mix.length > 0) {
+    sectionHead("Language Mix")
+    const langColors = [[59,130,246],[139,92,246],[6,182,212],[16,185,129],[245,158,11],[107,114,128]]
+    let cursor = margin
+    ensure(10)
+    languages.mix.forEach((l, i) => {
+      const w = (l.pct / 100) * contentW
+      doc.setFillColor(...langColors[i % langColors.length])
+      doc.rect(cursor, y, w, 4, "F")
+      cursor += w
+    })
+    y += 9
+    // legend
+    let lx = margin
+    languages.mix.forEach((l, i) => {
+      ensure(6)
+      const dot = langColors[i % langColors.length]
+      doc.setFillColor(...dot)
+      doc.circle(lx + 1.5, y - 1.5, 1, "F")
+      setFont(9, "normal", PDF_COLORS.body)
+      const txt = `${l.name} ${l.pct}%`
+      doc.text(txt, lx + 5, y)
+      lx += doc.getTextWidth(txt) + 10
+      if (lx > W - margin - 40) { lx = margin; y += 5 }
+    })
+    y += 10
+  }
+
+  /* ── Key Findings ────────────────────────────────────────────────── */
+  if (findings.length > 0) {
+    sectionHead("Key Findings")
+    for (const f of findings) {
+      const sevC = sevColorPDF(f.severity)
+      const label = f.severity === "high" ? "HIGH" : f.severity === "moderate" ? "WATCH" : f.severity === "ok" ? "OK" : "INFO"
+
+      // Measure pill width first
+      setFont(7.5, "bold")
+      const pillW = doc.getTextWidth(label) + 8
+      const pillH = 5
+
+      const titleX = margin + 8 + pillW + 6
+      const titleW = contentW - (titleX - margin) - 8
+      const detailW = contentW - 16
+
+      const titleLines = doc.splitTextToSize(f.title || "", titleW)
+      const detailLines = doc.splitTextToSize(f.detail || "", detailW)
+
+      const blockH = 7 + Math.max(pillH, titleLines.length * 4.5) + detailLines.length * 4.4 + 8
+      ensure(blockH + 4)
+
+      // Card
+      doc.setFillColor(...PDF_COLORS.surface)
+      doc.roundedRect(margin, y, contentW, blockH, 3, 3, "F")
+      // Left accent stripe
+      doc.setFillColor(...sevC)
+      doc.rect(margin, y, 2, blockH, "F")
+
+      // Severity pill (filled with severity color)
+      const pillX = margin + 8
+      const pillY = y + 7
+      doc.setFillColor(...sevC)
+      doc.roundedRect(pillX, pillY, pillW, pillH, 1.5, 1.5, "F")
+      setFont(7, "bold", [255, 255, 255])
+      doc.text(label, pillX + pillW / 2, pillY + 3.6, { align: "center", charSpace: 0.5 })
+
+      // Title
+      setFont(10.5, "bold", PDF_COLORS.ink)
+      doc.text(titleLines, titleX, y + 10.5)
+
+      // Detail
+      const detailY = y + 10.5 + titleLines.length * 4.8 + 2
+      setFont(9, "normal", PDF_COLORS.body)
+      doc.text(detailLines, margin + 8, detailY)
+
+      y += blockH + 5
+    }
+    y += 4
+  }
+
+  /* ── Insights ────────────────────────────────────────────────────── */
+  if (insights.length > 0) {
+    sectionHead("Detailed Insights")
+    for (const item of insights) {
+      const lines = doc.splitTextToSize(item, contentW - 6)
+      ensure(lines.length * 5 + 4)
+      setFont(9, "bold", PDF_COLORS.brand)
+      doc.text("·", margin + 1, y)
+      setFont(9.5, "normal", PDF_COLORS.body)
+      doc.text(lines, margin + 5, y)
+      y += lines.length * 5 + 3
+    }
+    y += 4
+  }
+
+  /* ── Recommendations ─────────────────────────────────────────────── */
+  if (recommendations.length > 0) {
+    sectionHead("Recommendations")
+    for (let i = 0; i < recommendations.length; i++) {
+      const item = recommendations[i]
+      const lines = doc.splitTextToSize(item, contentW - 14)
+      const blockH = Math.max(8, lines.length * 5 + 2)
+      ensure(blockH + 3)
+      // Numbered circle
+      const cx = margin + 3.5
+      const cy = y + 1
+      doc.setFillColor(...PDF_COLORS.brand)
+      doc.circle(cx, cy, 3, "F")
+      setFont(8, "bold", [255, 255, 255])
+      doc.text(String(i + 1), cx, cy + 1.3, { align: "center" })
+      // Body
+      setFont(10, "normal", PDF_COLORS.body)
+      doc.text(lines, margin + 10, y + 2.5)
+      y += blockH + 3
+    }
+  }
+
+  /* ── Page footers on every page ──────────────────────────────────── */
+  const total = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= total; i++) {
     doc.setPage(i)
-    doc.setFontSize(8); doc.setTextColor(160,160,160)
-    doc.text(`Page ${i} of ${pageCount} · Generated by Repository Analyzer`, W / 2, 292, { align: "center" })
+    setFont(8, "normal", PDF_COLORS.muted)
+    doc.text("Generated by Repository Analyzer", margin, H - 10)
+    doc.text(
+      new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+      W / 2, H - 10, { align: "center" }
+    )
+    doc.text(`Page ${i} / ${total}`, W - margin, H - 10, { align: "right" })
   }
 
-  doc.save("repository-risk-summary.pdf")
+  const safeName = (repoSlug || "repository").replace(/[^a-z0-9-]+/gi, "-").toLowerCase()
+  doc.save(`${safeName}-health-report.pdf`)
+}
+
+/* ── small date helpers (PDF-side) ──────────────────────────────────── */
+function relativeDaysPDF(days) {
+  if (days == null) return "—"
+  if (days === 0) return "today"
+  if (days === 1) return "yesterday"
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.round(days / 7)}w ago`
+  if (days < 365) return `${Math.round(days / 30)}mo ago`
+  const y = days / 365
+  return y >= 2 ? `${Math.round(y)}y ago` : `${y.toFixed(1)}y ago`
+}
+function formatAgePDF(days) {
+  if (!days || days < 30) return "<1 month"
+  if (days < 365) return `${Math.round(days / 30)} months`
+  const y = days / 365
+  return y >= 2 ? `${Math.round(y)} years` : `${y.toFixed(1)} years`
 }
 
 export default function ProjectRiskSummary({ data }) {

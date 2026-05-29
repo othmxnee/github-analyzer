@@ -17,6 +17,31 @@ function LorenzChart({ data, gini }) {
     return <p style={{ color: 'var(--t2)' }}>No data available</p>
   }
 
+  // Lorenz curve has N+1 points for N developers. With <2 contributors,
+  // inequality is undefined — showing Gini=0 ("perfect equality") is misleading.
+  if (data.x.length <= 2) {
+    return (
+      <div style={{
+        height: 260,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px 32px',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>—</div>
+        <div style={{ color: 'var(--t)', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+          Inequality metrics not applicable
+        </div>
+        <div style={{ color: 'var(--t2)', fontSize: 12, lineHeight: 1.6, maxWidth: 380 }}>
+          The Gini coefficient and Lorenz curve require at least 2 contributors.
+          This repository has a single developer who authored 100% of commits.
+        </div>
+      </div>
+    )
+  }
+
   const chartData = {
     datasets: [
       {

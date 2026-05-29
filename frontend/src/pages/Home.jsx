@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getRepoAnalysisResult, startRepoAnalysis } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
+import AuthButton from '../components/AuthButton'
+import RepoPicker from '../components/RepoPicker'
+
+const SUPPORTED_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org']
+const isSupportedRepoUrl = url => SUPPORTED_HOSTS.some(h => url.includes(h))
 import '../styles/Home.css'
 
 /* ═════════════════════════════════════════
@@ -190,9 +196,20 @@ export default function Home() {
   const [isLight, setIsLight]           = useState(false)
   const [phase, setPhase]               = useState('cloning')
   const [repoHistory, setRepoHistory]   = useState(loadHistory)
+  const auth = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   useReveal()
+
+  /* ── handle OAuth error redirect from backend ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authError = params.get('auth_error')
+    if (authError) {
+      setError('Sign-in failed. Please try again.')
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
 
   const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior:'smooth' })
   const wait     = ms => new Promise(r => setTimeout(r, ms))  // eslint-disable-line
@@ -221,8 +238,8 @@ export default function Home() {
     e?.preventDefault()
     const url = fallbackUrl || repoUrl
     setError('')
-    if (!url.trim())                { setError('Please enter a GitHub repository URL'); return }
-    if (!url.includes('github.com')){ setError('Please enter a valid GitHub URL');      return }
+    if (!url.trim())             { setError('Please enter a repository URL'); return }
+    if (!isSupportedRepoUrl(url)){ setError('Supported hosts: github.com, gitlab.com, bitbucket.org'); return }
     setLoading(true)
     setPhase('cloning')
     try {
@@ -261,6 +278,7 @@ export default function Home() {
       fetch('http://localhost:5000/analyze/skills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ repo_url: url }),
       }).catch(() => {})
       navigate('/dashboard')
@@ -284,6 +302,7 @@ export default function Home() {
           <li><button onClick={() => scrollTo('hp-metrics')}>Metrics</button></li>
         </ul>
         <div className="hp-nav-right">
+          <AuthButton auth={auth} />
           <button className="hp-mode-btn" onClick={toggleTheme}>
             {isLight
               ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
@@ -366,7 +385,10 @@ export default function Home() {
                   <span className="hp-history-label">Recent</span>
                   <div className="hp-pills">
                     {repoHistory.map(u => {
-                      const short = u.replace('https://github.com/', '')
+                      const short = u
+                        .replace('https://github.com/', '')
+                        .replace('https://gitlab.com/', '')
+                        .replace('https://bitbucket.org/', '')
                       return (
                         <div key={u} className="hp-pill hp-pill-history" onClick={() => setRepoUrl(u)} title={u}>
                           {short}
@@ -385,7 +407,14 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  <div className="hp-note">No auth required</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {auth.authenticated && <RepoPicker onSelect={setRepoUrl} providers={auth.providers} />}
+                    <div className="hp-note">
+                      {auth.authenticated
+                        ? <span style={{ color: 'var(--green)' }}>Private repos unlocked</span>
+                        : 'Sign in for private repos'}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

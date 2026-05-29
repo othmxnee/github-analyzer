@@ -75,7 +75,7 @@ function TimelineChart({ data }) {
   }
 
   return (
-    <div style={{ height: '200px', position: 'relative' }}>
+    <div style={{ height: '380px', position: 'relative' }}>
       <Line data={chartData} options={options} />
     </div>
   )

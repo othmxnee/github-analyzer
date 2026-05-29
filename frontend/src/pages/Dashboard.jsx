@@ -16,6 +16,7 @@ import CommitFrequencyChart from '../components/Charts/CommitFrequencyChart'
 import ArchitectureGraph from '../components/Charts/ArchitectureGraph'
 import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisualization'
 import ProjectRiskSummary, { downloadPDF } from '../components/Charts/ProjectRiskSummary'
+import OverviewSection from '../components/Charts/OverviewSection'
 import RepositoryTreemap from '../components/Charts/RepositoryTreemap'
 import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
 import DevelopersList from '../components/Charts/DevelopersList'
@@ -23,7 +24,10 @@ import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
 import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
 import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
 import DeveloperScatterPlot from '../components/Charts/DeveloperScatterPlot'
+import TimelineCard from '../components/TimelineCard'
+import ComparisonList from '../components/ComparisonList'
 import '../styles/Dashboard.css'
+import '../styles/Timeline.css'
 
 /* ─────────────────────────────────────────
    SVG ICONS
@@ -172,6 +176,24 @@ function ChartCard({ title, sub, children }) {
 }
 
 /* ─────────────────────────────────────────
+   TIMELINE DATA ADAPTERS
+   Unwrap the windowed response {items|series|points|...} → the array/object
+   shape each chart already understands. When the user is on "All time"
+   without comparison, `windowed` is null and we fall back to the original
+   per-section data passed via `fallback`.
+───────────────────────────────────────── */
+const asItems  = (w, fb) => (w?.items   ?? (Array.isArray(fb) ? fb : []))
+const asSeries = (w, fb) => (w?.series  ?? (Array.isArray(fb) ? fb : []))
+const asPoints = (w, fb) => (w?.points  ?? (Array.isArray(fb) ? fb : []))
+const asWhole  = (w, fb) => (w ?? fb)
+
+const tail = (path) => {
+  const s = String(path || '')
+  const parts = s.split('/')
+  return parts.length > 2 ? '…/' + parts.slice(-2).join('/') : s
+}
+
+/* ─────────────────────────────────────────
    STAT CARD (overrides old one)
 ───────────────────────────────────────── */
 function StatCard({ label, value, sublabel, risk }) {
@@ -229,10 +251,10 @@ export default function Dashboard() {
   }, [navigate])
 
   /* ── fetch skills (lazy: only starts when user first visits "Developer Roles") ── */
-  const skillsStarted = useRef(false)
   useEffect(() => {
-    if (!repoUrl || (activeSection !== 'roles' && activeSection !== 'developers') || skillsStarted.current) return
-    skillsStarted.current = true
+    if (!repoUrl) return
+    if (activeSection !== 'roles' && activeSection !== 'developers') return
+    if (skillsData) return  // already loaded — skip
     setSkillsLoading(true)
     setSkillsError(null)
 
@@ -272,7 +294,7 @@ export default function Dashboard() {
     run().catch(err => { if (!cancelled) { setSkillsError(err.message); setSkillsLoading(false) } })
 
     return () => { cancelled = true; if (interval) clearInterval(interval) }
-  }, [repoUrl, activeSection])
+  }, [repoUrl, activeSection, skillsData])
 
   const toggleTheme = useCallback(() => {
     setIsLight(v => {
@@ -312,7 +334,8 @@ export default function Dashboard() {
     treemap = { ids: [], labels: [], parents: [], values: [], paths: [] },
     voronoi = { nodes: [], edges: [] },
     busfactor_simulation = { developers: [], simulation: [] },
-    project_summary = { health_score: 0, risk_level: 'Unknown', insights: [], recommendations: [] }
+    project_summary = { health_score: 0, risk_level: 'Unknown', insights: [], recommendations: [] },
+    overview = {}
   } = results
 
   const repoSlug = (() => {
@@ -334,30 +357,17 @@ export default function Dashboard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-card)' }}>
       <SectionHead
         eyebrow="Overview"
-        title="Project Health"
-        sub="High-level risk indicators at a glance"
+        title="Project Health at a Glance"
+        sub="Who's active, what's at risk, and where to look next"
       />
-      <div className="stat-grid">
-        <StatCard label="Total Commits"   value={summary.total_commits} />
-        <StatCard label="Developers"      value={summary.total_developers} />
-        <StatCard label="Files Analyzed"  value={summary.total_files} />
-        <StatCard label="Modifications"   value={summary.total_modifications} />
-        <StatCard
-          label="Gini Coefficient"
-          value={gini?.toFixed(3) || 'N/A'}
-          sublabel="Contribution inequality"
-          risk={giniRisk}
-        />
-        <StatCard
-          label="Bus Factor"
-          value={bus_factor}
-          sublabel="Devs covering 50% of changes"
-          risk={busRisk}
-        />
-      </div>
-      <ChartCard title="Repository Risk Summary" sub="Composite score across all risk dimensions">
-        <ProjectRiskSummary data={project_summary} />
-      </ChartCard>
+      <OverviewSection
+        repoSlug={repoSlug}
+        summary={summary}
+        overview={overview}
+        projectSummary={project_summary}
+        gini={gini}
+        busFactor={bus_factor}
+      />
     </div>
   )
 
@@ -371,9 +381,18 @@ export default function Dashboard() {
 
       {/* Row 1 — Timeline (wider) + Inter-Commit (narrower) */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--gap-card)' }}>
-        <ChartCard title="Activity Timeline" sub="Monthly commit volume">
-          <TimelineChart data={timeline} />
-        </ChartCard>
+        <TimelineCard
+          title="Activity Timeline"
+          sub="Monthly commit volume"
+          metric="activity"
+          repoUrl={repoUrl}
+          fallback={timeline}
+          aggregateLabel="modifications"
+        >
+          {({ current }) => (
+            <TimelineChart data={asPoints(current, timeline)} />
+          )}
+        </TimelineCard>
         <ChartCard title="Inter-Commit Time (Days)">
           <InterCommitTable data={inter_commit} />
         </ChartCard>
@@ -381,23 +400,68 @@ export default function Dashboard() {
 
       {/* Row 2 — Lorenz + Top Developers filling the row equally */}
       <div className="grid-2">
-        <ChartCard title="Contribution Inequality (Lorenz Curve)">
-          <LorenzChart data={lorenz} gini={gini} />
-        </ChartCard>
-        <ChartCard title="Top Developers by Commits">
-          <TopDevelopersChart data={top_developers} />
-        </ChartCard>
+        <TimelineCard
+          title="Contribution Inequality (Lorenz Curve)"
+          metric="gini_lorenz"
+          repoUrl={repoUrl}
+          fallback={{ gini, lorenz }}
+          aggregateLabel="Gini"
+          deltaDirection="down_good"
+        >
+          {({ current }) => {
+            const g = current?.gini ?? gini
+            const l = current?.lorenz ?? lorenz
+            return <LorenzChart data={l} gini={g} />
+          }}
+        </TimelineCard>
+        <TimelineCard
+          title="Top Developers by Commits"
+          metric="top_developers"
+          repoUrl={repoUrl}
+          fallback={top_developers}
+          aggregateLabel="commits"
+        >
+          {({ current, delta }) => (
+            <>
+              <TopDevelopersChart data={asItems(current, top_developers)} />
+              {delta?.per_item && (
+                <ComparisonList items={delta.per_item} valueLabel="commits" />
+              )}
+            </>
+          )}
+        </TimelineCard>
       </div>
 
       {/* Row 3 — Commit frequency full width */}
-      <ChartCard title="Developer Activity Over Time">
-        <CommitFrequencyChart data={commit_frequency} />
-      </ChartCard>
+      <TimelineCard
+        title="Developer Activity Over Time"
+        metric="commit_frequency"
+        repoUrl={repoUrl}
+        fallback={commit_frequency}
+        aggregateLabel="active devs"
+      >
+        {({ current }) => (
+          <CommitFrequencyChart data={asSeries(current, commit_frequency)} />
+        )}
+      </TimelineCard>
 
-      {/* Row 4 — Dev mods timeline full width */}
-      <ChartCard title="Top Developers by File Modifications">
-        <TopDevModsChart data={top_devs_mods} />
-      </ChartCard>
+      {/* Row 4 — Dev mods full width */}
+      <TimelineCard
+        title="Top Developers by File Modifications"
+        metric="top_devs_mods"
+        repoUrl={repoUrl}
+        fallback={top_devs_mods}
+        aggregateLabel="modifications"
+      >
+        {({ current, delta }) => (
+          <>
+            <TopDevModsChart data={asItems(current, top_devs_mods)} />
+            {delta?.per_item && (
+              <ComparisonList items={delta.per_item} valueLabel="mods" />
+            )}
+          </>
+        )}
+      </TimelineCard>
 
       {/* Row 5 — Heatmap full width */}
       <ChartCard title="Developer–File Activity Heatmap">
@@ -424,9 +488,19 @@ export default function Dashboard() {
           <RiskTable data={risk_files} />
         </ChartCard>
       </div>
-      <ChartCard title="Bus Factor Risk Simulation">
-        <BusFactorRiskVisualization data={busfactor_simulation} />
-      </ChartCard>
+      <TimelineCard
+        title="Bus Factor Risk Simulation"
+        sub="Window-based bus factor uses churn-weighted ownership (approximation)"
+        metric="bus_factor"
+        repoUrl={repoUrl}
+        fallback={busfactor_simulation}
+        aggregateLabel="bus factor"
+        deltaDirection="up_good"
+      >
+        {({ current }) => (
+          <BusFactorRiskVisualization data={current ?? busfactor_simulation} />
+        )}
+      </TimelineCard>
       <div className="grid-2">
         <ChartCard title="Line Ownership Table">
           <OwnershipTable data={ownership_table} />
@@ -446,16 +520,45 @@ export default function Dashboard() {
         sub="Highest-churn files by modification frequency"
       />
       <div className="grid-2">
-        <ChartCard title="Top Modified Files (Hotspots)">
-          <HotspotFilesChart data={hotspot_files} />
-        </ChartCard>
-        <ChartCard title="Repository File Hotspots (Treemap)">
-          <RepositoryTreemap data={treemap} />
-        </ChartCard>
+        <TimelineCard
+          title="Top Modified Files (Hotspots)"
+          metric="hotspots"
+          repoUrl={repoUrl}
+          fallback={hotspot_files}
+          aggregateLabel="modifications"
+        >
+          {({ current, delta }) => (
+            <>
+              <HotspotFilesChart data={asItems(current, hotspot_files)} />
+              {delta?.per_item && (
+                <ComparisonList items={delta.per_item} valueLabel="mods" keyShorten={tail} />
+              )}
+            </>
+          )}
+        </TimelineCard>
+        <TimelineCard
+          title="Repository File Hotspots (Treemap)"
+          metric="treemap"
+          repoUrl={repoUrl}
+          fallback={treemap}
+          aggregateLabel="modifications"
+        >
+          {({ current }) => (
+            <RepositoryTreemap data={asWhole(current, treemap)} />
+          )}
+        </TimelineCard>
       </div>
-      <ChartCard title="Import-Coupled File Hotspots (Voronoi)">
-        <VoronoiTreemap data={voronoi} />
-      </ChartCard>
+      <TimelineCard
+        title="Import-Coupled File Hotspots (Voronoi)"
+        metric="voronoi"
+        repoUrl={repoUrl}
+        fallback={voronoi}
+        aggregateLabel="modifications"
+      >
+        {({ current }) => (
+          <VoronoiTreemap data={asWhole(current, voronoi)} />
+        )}
+      </TimelineCard>
     </div>
   )
 
