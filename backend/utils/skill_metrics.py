@@ -134,7 +134,9 @@ def assign_role(frontend, backend, test, devops, mobile):
         return 'DevOps'
     if mobile >= THRESHOLDS['mobile']:
         return 'Mobile'
-    if frontend >= THRESHOLDS['fullstack'] and backend >= THRESHOLDS['fullstack']:
+    # Full Stack: both stacks meaningfully present (>= 10%) and neither dominates by more than 2x
+    if (frontend >= 0.10 and backend >= 0.10 and
+            min(frontend, backend) / max(frontend, backend) >= 0.5):
         return 'Full Stack'
     if frontend >= THRESHOLDS['frontend']:
         return 'Frontend'

@@ -20,6 +20,7 @@ from utils.metrics import (
     build_dependency_graph,
     simulate_bus_factor_risk,
     generate_project_summary,
+    build_overview_data,
     normalize_path,
 )
 
@@ -40,6 +41,10 @@ _ANALYSIS_PHASE = {}        # repo_url -> current phase string while running
 _ANALYSIS_TIMESTAMPS = {}   # repo_url -> unix timestamp of last completed analysis
 _LAST_REPO_URL = None
 
+# Cleaned dataframes + ownership snapshots kept so windowed timeline metrics
+# can re-slice without re-cloning. Same keys as _ANALYSIS_CACHE.
+_CLEANED_CACHE = {}   # repo_url -> {"df_commits": ..., "df_files": ..., "ownership_results": ..., "line_counts": ..., "architecture": ..., "kci_data": ...}
+
 CACHE_TTL = 30 * 60        # 30 minutes — auto-rerun after this on next request
 CACHE_MAX_AGE = 24 * 3600  # 24 hours  — hard eviction (frees memory)
 
@@ -53,19 +58,34 @@ def _evict_stale_entries():
         _ANALYSIS_STATUS.pop(url, None)
         _ANALYSIS_PHASE.pop(url, None)
         _ANALYSIS_TIMESTAMPS.pop(url, None)
+        _CLEANED_CACHE.pop(url, None)
 
 
 
 
-def _run_analysis(repo_url: str):
+def _build_clone_url(repo_url: str, token: str, provider: str) -> str:
+    """Inject an OAuth token into a clone URL using the provider's expected scheme."""
+    if not token:
+        return repo_url
+    if provider == 'gitlab':
+        userinfo = f'oauth2:{token}'
+    elif provider == 'bitbucket':
+        userinfo = f'x-token-auth:{token}'
+    else:  # github (and default)
+        userinfo = token
+    return repo_url.replace('https://', f'https://{userinfo}@', 1)
+
+
+def _run_analysis(repo_url: str, token: str = None, provider: str = None):
     global _LAST_REPO_URL
     tmp_dir = tempfile.mkdtemp()
     try:
         _ANALYSIS_STATUS[repo_url] = 'running'
 
         _ANALYSIS_PHASE[repo_url] = 'cloning'
+        clone_url = _build_clone_url(repo_url, token, provider)
         result = subprocess.run(
-            ["git", "clone", repo_url, tmp_dir],
+            ["git", "clone", clone_url, tmp_dir],
             capture_output=True,
             text=True,
         )
@@ -74,9 +94,11 @@ def _run_analysis(repo_url: str):
             if 'not found' in stderr.lower() or 'repository not found' in stderr.lower():
                 raise ValueError(f"Repository not found: {repo_url}")
             if 'rate limit' in stderr.lower():
-                raise ValueError("GitHub rate limit reached. Wait a few minutes and try again.")
+                raise ValueError("Rate limit reached on the Git host. Wait a few minutes and try again.")
             if 'could not resolve host' in stderr.lower() or 'unable to access' in stderr.lower():
-                raise ValueError("Network error: could not reach GitHub. Check your connection.")
+                raise ValueError("Network error: could not reach the Git host. Check your connection.")
+            if 'authentication failed' in stderr.lower() or 'invalid credentials' in stderr.lower():
+                raise ValueError("Authentication failed. Sign in to the matching provider for private repos.")
             raise ValueError(f"git clone failed: {stderr or f'exit code {result.returncode}'}")
 
         _ANALYSIS_PHASE[repo_url] = 'extracting'
@@ -86,9 +108,20 @@ def _run_analysis(repo_url: str):
         df_commits, df_files = clean_data(commits_data, file_modifications)
 
         _ANALYSIS_PHASE[repo_url] = 'computing'
-        results = compute_metrics(tmp_dir, df_commits, df_files, commits_data)
+        results, internals = compute_metrics(tmp_dir, df_commits, df_files, commits_data)
 
         _ANALYSIS_CACHE[repo_url] = results
+        # Persist cleaned dataframes + ownership snapshots so the timeline
+        # service can compute windowed metrics without re-cloning.
+        _CLEANED_CACHE[repo_url] = {
+            "df_commits":        df_commits,
+            "df_files":          df_files,
+            "ownership_results": internals.get("ownership_results", {}),
+            "line_counts":       internals.get("line_counts", {}),
+            "architecture":      internals.get("architecture", {"nodes": [], "edges": []}),
+            "kci_data":          internals.get("kci_data", {}),
+            "in_degree_data":    internals.get("in_degree_data", {}),
+        }
         _LAST_REPO_URL = repo_url
         _ANALYSIS_TIMESTAMPS[repo_url] = time.time()
         _ANALYSIS_STATUS[repo_url] = 'done'
@@ -105,7 +138,7 @@ def _run_analysis(repo_url: str):
             shutil.rmtree(tmp_dir)
 
 
-def start_analysis(repo_url: str, force: bool = False):
+def start_analysis(repo_url: str, force: bool = False, token: str = None, provider: str = None):
     _evict_stale_entries()
 
     status = _ANALYSIS_STATUS.get(repo_url)
@@ -117,16 +150,20 @@ def start_analysis(repo_url: str, force: bool = False):
             _ANALYSIS_STATUS.pop(repo_url, None)
             _ANALYSIS_CACHE.pop(repo_url, None)
             _ANALYSIS_TIMESTAMPS.pop(repo_url, None)
+            _CLEANED_CACHE.pop(repo_url, None)
             status = None
             # Invalidate skills cache so it re-runs from scratch on next request
             from services.skill_service import invalidate_for_repo
             invalidate_for_repo(repo_url)
+            # Also clear windowed-timeline LRU so stale slices aren't served
+            from services.timeline_service import invalidate_for_repo as invalidate_timeline
+            invalidate_timeline(repo_url)
 
     if status == 'done':
         return {'status': 'done', 'analyzed_at': _ANALYSIS_TIMESTAMPS.get(repo_url)}
 
     if status != 'running':
-        thread = threading.Thread(target=_run_analysis, args=(repo_url,), daemon=True)
+        thread = threading.Thread(target=_run_analysis, args=(repo_url, token, provider), daemon=True)
         thread.start()
 
     return {'status': _ANALYSIS_STATUS.get(repo_url, 'running')}
@@ -516,6 +553,18 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
             "architecture": architecture_data,
         }
     )
+
+    overview = build_overview_data(
+        df_commits=df_commits,
+        df_files=df_files,
+        ownership_results=ownership_results,
+        line_counts=line_counts,
+        risk_data=risk_data,
+        busfactor_simulation=busfactor_simulation,
+        gini_value=float(gini_value),
+        bus_factor=int(bus_factor),
+        project_summary=project_summary,
+    )
     
     ownership_rows = []
     for file, owners in ownership_results.items():
@@ -569,7 +618,7 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
     commit_frequency = compute_developer_activity_over_time(df_files)
     dev_stats = _compute_dev_stats(commits_data_raw or [], df_files)
 
-    return {
+    results = {
         "summary": summary,
         "top_developers": top_developers_list,
         "top_devs_mods": top_devs_mods_list,
@@ -591,8 +640,19 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
         "voronoi": voronoi_data,
         "busfactor_simulation": busfactor_simulation,
         "project_summary": project_summary,
+        "overview": overview,
         "dev_stats": dev_stats,
     }
+
+    internals = {
+        "ownership_results": ownership_results,
+        "line_counts":       line_counts,
+        "architecture":      architecture_data,
+        "kci_data":          kci_data,
+        "in_degree_data":    in_degree_data,
+    }
+
+    return results, internals
 
 
 def compute_inter_commit_time(df_commits):
@@ -683,3 +743,17 @@ def get_treemap_data(repo_url=None):
 def get_voronoi_data(repo_url=None):
     analysis = _resolve_analysis(repo_url)
     return analysis.get("voronoi", {"nodes": [], "edges": []})
+
+
+def get_cleaned_data(repo_url=None):
+    """Return cached cleaned dataframes + ownership snapshots for the repo.
+
+    Used by services/timeline_service.py to compute windowed metrics.
+    Raises if no completed analysis exists.
+    """
+    url = repo_url or _LAST_REPO_URL
+    if not url or url not in _CLEANED_CACHE:
+        raise ValueError(
+            f"No cached cleaned data for '{url}'. POST /analyze and wait for status=done."
+        )
+    return _CLEANED_CACHE[url]

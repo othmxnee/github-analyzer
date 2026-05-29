@@ -31,8 +31,11 @@ FEATURE_COLS = [
 
 
 def _run_clustering(rows, n_clusters=4):
-    if len(rows) < n_clusters:
-        n_clusters = max(2, len(rows))
+    if len(rows) == 1:
+        rows[0]['cluster'] = 0
+        return rows
+
+    n_clusters = min(n_clusters, len(rows))
 
     X = np.array([[r.get(f, 0) for f in FEATURE_COLS] for r in rows])
     scaler = MinMaxScaler()

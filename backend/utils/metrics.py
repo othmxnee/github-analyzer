@@ -661,6 +661,239 @@ def _kci_indegree_score(risk_scores):
     return 0
 
 
+_EXT_TO_LANG = {
+    "py": "Python",
+    "js": "JavaScript", "jsx": "JavaScript", "mjs": "JavaScript", "cjs": "JavaScript",
+    "ts": "TypeScript", "tsx": "TypeScript",
+    "java": "Java", "kt": "Kotlin", "scala": "Scala",
+    "swift": "Swift", "dart": "Dart",
+    "go": "Go", "rs": "Rust",
+    "c": "C", "h": "C",
+    "cpp": "C++", "hpp": "C++", "cc": "C++", "cxx": "C++",
+    "cs": "C#", "rb": "Ruby", "php": "PHP",
+    "vue": "Vue", "svelte": "Svelte",
+    "sh": "Shell", "bash": "Shell", "zsh": "Shell",
+    "sql": "SQL", "r": "R", "m": "Objective-C",
+    "lua": "Lua", "ex": "Elixir", "exs": "Elixir",
+    "clj": "Clojure", "hs": "Haskell", "ml": "OCaml",
+}
+
+
+def _language_mix(df_files, max_items=4):
+    if len(df_files) == 0:
+        return []
+    counts = {}
+    for p in df_files["path"].astype(str):
+        ext = p.rsplit(".", 1)[-1].lower() if "." in p else ""
+        lang = _EXT_TO_LANG.get(ext)
+        if not lang:
+            continue
+        counts[lang] = counts.get(lang, 0) + 1
+    total = sum(counts.values())
+    if total == 0:
+        return []
+    sorted_langs = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+    mix = [{"name": l, "pct": round(c / total * 100)} for l, c in sorted_langs[:max_items]]
+    other = 100 - sum(item["pct"] for item in mix)
+    if other > 0 and len(sorted_langs) > max_items:
+        mix.append({"name": "Other", "pct": other})
+    return mix
+
+
+def _short_name(developer_id):
+    if not developer_id:
+        return "?"
+    s = str(developer_id)
+    if "@" in s:
+        return s.split("@", 1)[0]
+    return s
+
+
+def build_overview_data(df_commits, df_files, ownership_results, line_counts,
+                        risk_data, busfactor_simulation, gini_value, bus_factor,
+                        project_summary):
+    if len(df_commits) == 0:
+        return {}
+
+    last_commit = df_commits["author_date"].max()
+    first_commit = df_commits["author_date"].min()
+    now_real = pd.Timestamp.now(tz=last_commit.tz) if getattr(last_commit, "tz", None) else pd.Timestamp.now()
+    last_commit_days_ago = max(0, int((now_real - last_commit).days))
+    project_age_days = max(0, int((last_commit - first_commit).days))
+
+    # 90d windows referenced against the last commit so old repos still get a trend.
+    cutoff_90d = last_commit - pd.Timedelta(days=90)
+    cutoff_180d = last_commit - pd.Timedelta(days=180)
+    recent = df_commits[df_commits["author_date"] >= cutoff_90d]
+    prior = df_commits[(df_commits["author_date"] >= cutoff_180d) & (df_commits["author_date"] < cutoff_90d)]
+
+    active_devs_90d = int(recent["developer_id"].nunique())
+    total_devs = int(df_commits["developer_id"].nunique())
+    cpw_recent = round(len(recent) / 13.0, 1)
+    cpw_prior = round(len(prior) / 13.0, 1)
+
+    trend = "flat"
+    trend_pct = 0
+    if cpw_prior > 0:
+        diff_pct = (cpw_recent - cpw_prior) / cpw_prior * 100
+        trend_pct = int(round(diff_pct))
+        if diff_pct > 15:
+            trend = "up"
+        elif diff_pct < -15:
+            trend = "down"
+    elif cpw_recent > 0:
+        trend = "up"
+        trend_pct = 100
+
+    lang_mix = _language_mix(df_files)
+    primary_lang = lang_mix[0]["name"] if lang_mix else "Unknown"
+
+    # ── Named findings (specific, with real names) ──────────────────────
+    findings = []
+
+    sim_steps = busfactor_simulation.get("simulation", []) or []
+    sim_devs = busfactor_simulation.get("developers", []) or []
+    if sim_steps:
+        names_at_bf, lost_at_bf = [], 0.0
+        for step in sim_steps:
+            if step.get("knowledge_lost", 0) >= 0.5:
+                lost_at_bf = float(step["knowledge_lost"])
+                slice_ = sim_devs[: int(step.get("removed", 0))]
+                names_at_bf = [
+                    d.get("name") if isinstance(d, dict) else d
+                    for d in slice_
+                ]
+                names_at_bf = [n for n in names_at_bf if n]
+                break
+        if names_at_bf and bus_factor <= 3:
+            sev = "high" if bus_factor <= 2 else "moderate"
+            short = [_short_name(d) for d in names_at_bf]
+            if len(short) == 1:
+                who = short[0]
+            elif len(short) == 2:
+                who = f"{short[0]} and {short[1]}"
+            else:
+                who = f"{', '.join(short[:-1])}, and {short[-1]}"
+            findings.append({
+                "kind": "bus_factor",
+                "severity": sev,
+                "title": f"Knowledge concentrated in {bus_factor} developer{'s' if bus_factor != 1 else ''}",
+                "detail": f"If {who} stopped contributing, ~{int(lost_at_bf * 100)}% of the codebase would have no remaining author.",
+            })
+        elif bus_factor >= 5:
+            findings.append({
+                "kind": "bus_factor",
+                "severity": "ok",
+                "title": f"Bus factor is healthy ({bus_factor})",
+                "detail": f"It takes {bus_factor} developers leaving to lose half the codebase knowledge — no single departure threatens continuity.",
+            })
+
+    if risk_data:
+        sorted_risk = sorted(risk_data.items(), key=lambda x: x[1], reverse=True)
+        top_file, top_score = sorted_risk[0]
+        owners = ownership_results.get(top_file, {})
+        if owners and top_score > 0.05:
+            primary_owner, primary_share = max(owners.items(), key=lambda x: x[1])
+            sev = "high" if top_score > 0.5 else "moderate"
+            findings.append({
+                "kind": "risk_file",
+                "severity": sev,
+                "title": f"{top_file} is the top knowledge hotspot",
+                "detail": f"{int(primary_share * 100)}% authored by {_short_name(primary_owner)} on a file other modules depend on. Loss of this contributor would be costly.",
+            })
+
+    if gini_value > 0.75 and total_devs >= 3:
+        findings.append({
+            "kind": "inequality",
+            "severity": "high" if gini_value > 0.85 else "moderate",
+            "title": f"Contribution is skewed (Gini {gini_value:.2f})",
+            "detail": f"Of {total_devs} contributors, a small core does most of the work. The long tail rarely commits.",
+        })
+    elif 0.5 <= gini_value <= 0.75 and len(findings) < 3:
+        findings.append({
+            "kind": "inequality",
+            "severity": "ok",
+            "title": "Contribution is reasonably distributed",
+            "detail": f"Gini = {gini_value:.2f} across {total_devs} contributors — typical for an active team-led project.",
+        })
+
+    # ── One-sentence verdict ────────────────────────────────────────────
+    age_label = (
+        "young" if project_age_days < 365 else
+        "established" if project_age_days < 365 * 3 else
+        "mature"
+    )
+    if last_commit_days_ago > 365:
+        activity_label = "long-dormant"
+    elif last_commit_days_ago > 180:
+        activity_label = "stale"
+    elif trend == "down":
+        activity_label = "slowing"
+    elif trend == "up":
+        activity_label = "growing"
+    else:
+        activity_label = "steady"
+
+    health_score = project_summary.get("health_score", 0)
+    if bus_factor <= 2:
+        concern = f", but knowledge is dangerously concentrated in {bus_factor} developer{'s' if bus_factor != 1 else ''}"
+    elif gini_value > 0.8:
+        concern = ", but contribution is heavily skewed toward a few people"
+    elif health_score >= 75:
+        concern = " and overall health looks strong"
+    elif health_score < 50:
+        concern = " with several health concerns to address"
+    else:
+        concern = ""
+
+    verdict = f"A {age_label} {primary_lang} project with {activity_label} activity{concern}."
+
+    # ── 4 health dimensions (no duplicates with stat cards) ─────────────
+    activity_score = 100
+    if last_commit_days_ago > 30:  activity_score -= 15
+    if last_commit_days_ago > 90:  activity_score -= 30
+    if last_commit_days_ago > 180: activity_score -= 30
+    if trend == "down": activity_score -= 10
+    activity_score = max(0, min(100, activity_score))
+
+    team_score = 0
+    if total_devs > 0:
+        active_ratio = active_devs_90d / total_devs
+        team_score = min(100, int(40 * active_ratio + 12 * min(active_devs_90d, 5)))
+
+    dims = project_summary.get("dimensions", {}) or {}
+    knowledge_score = int(dims.get("KCI × In-Degree", 50))
+    distribution_score = int(dims.get("Gini Coefficient", 50))
+
+    return {
+        "verdict": verdict,
+        "activity": {
+            "active_devs_90d": active_devs_90d,
+            "total_devs": total_devs,
+            "commits_per_week_90d": cpw_recent,
+            "commits_per_week_prior": cpw_prior,
+            "trend": trend,
+            "trend_pct": trend_pct,
+            "last_commit_days_ago": last_commit_days_ago,
+            "last_commit_iso": str(last_commit),
+            "first_commit_iso": str(first_commit),
+            "project_age_days": project_age_days,
+            "is_stale": last_commit_days_ago > 180,
+        },
+        "languages": {
+            "primary": primary_lang,
+            "mix": lang_mix,
+        },
+        "named_findings": findings[:3],
+        "health_dimensions": {
+            "Activity":     activity_score,
+            "Team":         team_score,
+            "Knowledge":    knowledge_score,
+            "Distribution": distribution_score,
+        },
+    }
+
+
 def generate_project_summary(metrics):
     gini        = float(metrics.get("gini", 0.0))
     bus_factor  = int(metrics.get("bus_factor", 0))

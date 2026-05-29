@@ -1,25 +1,63 @@
-node_modules
-pfeenv
-# React
+# ---------- Node / Frontend ----------
+node_modules/
+frontend/dist/
 build/
-dist/
-.env.local
-.env.*.local
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Python
+# ---------- Python / Backend ----------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+pfeenv/
 env/
 venv/
 ENV/
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.coverage
+.venv/
+
+# ---------- Environment / secrets ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---------- Editors / IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Logs / temp ----------
+*.log
+logs/
+tmp/
+.cache/
+
+# ---------- Local-only project files ----------
+/CLAUDE.md
+/outline/
+/vscode-extension-v4/
+/vscode-extension-v6/

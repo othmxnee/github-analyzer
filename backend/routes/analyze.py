@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from services.analyzer import (
     get_analysis_result,
     get_architecture,
@@ -9,12 +9,35 @@ from services.analyzer import (
     start_analysis,
 )
 from services.skill_service import analyze_skills, get_skills_result
+from services.timeline_service import compute_metric, list_metrics
 
 analyze_bp = Blueprint('analyze', __name__)
 
+# Hosts we know how to clone + inject tokens for. Public repos on these hosts
+# work without sign-in; private repos use the matching provider's session token.
+_HOST_TO_PROVIDER = {
+    'https://github.com/':    'github',
+    'https://gitlab.com/':    'gitlab',
+    'https://bitbucket.org/': 'bitbucket',
+}
 
+
+def _provider_for_url(repo_url):
+    if not isinstance(repo_url, str):
+        return None
+    for prefix, provider in _HOST_TO_PROVIDER.items():
+        if repo_url.startswith(prefix):
+            return provider
+    return None
+
+
+def _validate_repo_url(repo_url):
+    return _provider_for_url(repo_url) is not None
+
+
+# Backwards-compat alias — some places may still call this name.
 def _validate_github_url(repo_url):
-    return isinstance(repo_url, str) and repo_url.startswith('https://github.com/')
+    return _validate_repo_url(repo_url)
 
 
 @analyze_bp.route('/analyze', methods=['POST'])
@@ -25,9 +48,11 @@ def analyze():
             return jsonify({'error': 'repo_url is required'}), 400
         repo_url = data['repo_url']
         if not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         force = bool(data.get('force', False))
-        return jsonify(start_analysis(repo_url, force=force))
+        provider = _provider_for_url(repo_url)
+        token = session.get(f'{provider}_token') if provider else None
+        return jsonify(start_analysis(repo_url, force=force, token=token, provider=provider))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -37,7 +62,7 @@ def analyze_result():
     try:
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_analysis_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -48,7 +73,7 @@ def architecture():
     try:
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_architecture(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -59,7 +84,7 @@ def busfactor_simulation():
     try:
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_busfactor_simulation(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -70,7 +95,7 @@ def project_summary():
     try:
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_project_summary_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -81,7 +106,7 @@ def treemap():
     try:
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_treemap_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -92,7 +117,7 @@ def voronoi():
     try:
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_voronoi_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -106,11 +131,48 @@ def skills():
             return jsonify({'error': 'repo_url is required'}), 400
         repo_url = data['repo_url']
         if not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         result = analyze_skills(repo_url)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/metric/<metric>', methods=['GET'])
+def metric_timeline(metric):
+    """Windowed metric endpoint — re-slices cached cleaned data by date.
+
+    Query params:
+      repo_url  — required, must match an already-analyzed repo
+      start     — ISO date (YYYY-MM-DD), optional (open-ended)
+      end       — ISO date (YYYY-MM-DD), optional (open-ended)
+      compare   — '1'/'true' to also return the previous period of equal length
+    """
+    try:
+        repo_url = request.args.get('repo_url')
+        if not repo_url or not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid repository URL.'}), 400
+
+        start        = request.args.get('start') or None
+        end          = request.args.get('end')   or None
+        compare      = (request.args.get('compare') or '').lower() in ('1', 'true', 'yes')
+        compare_mode = (request.args.get('compare_mode') or 'previous').lower()
+
+        result = compute_metric(
+            repo_url, metric,
+            start=start, end=end,
+            compare=compare, compare_mode=compare_mode,
+        )
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/metric', methods=['GET'])
+def metric_list():
+    return jsonify({"metrics": list_metrics()})
 
 
 @analyze_bp.route('/analyze/skills/result', methods=['GET'])
@@ -118,7 +180,7 @@ def skills_result():
     try:
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid GitHub URL'}), 400
+            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         return jsonify(get_skills_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500

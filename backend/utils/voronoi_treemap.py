@@ -165,6 +165,15 @@ def build_voronoi_data(
     )
     mod_counts = mod_counts[mod_counts >= _MIN_MODS].head(top_n)
 
+    # Fallback for small repos: relax threshold to 2 so the diagram still renders
+    if mod_counts.empty:
+        all_counts = (
+            files.groupby("file_id")["commit_hash"]
+            .nunique()
+            .sort_values(ascending=False)
+        )
+        mod_counts = all_counts[all_counts >= 2].head(top_n)
+
     if mod_counts.empty:
         return {"nodes": [], "edges": []}
 
