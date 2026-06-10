@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getRepoAnalysisResult, startRepoAnalysis } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useReveal, useEntrance, CountUp, useInView } from '../hooks/useMotion'
 import AuthButton from '../components/AuthButton'
 import RepoPicker from '../components/RepoPicker'
 
@@ -10,71 +11,133 @@ const isSupportedRepoUrl = url => SUPPORTED_HOSTS.some(h => url.includes(h))
 import '../styles/Home.css'
 
 /* ═════════════════════════════════════════
-   PARTICLE CANVAS
+   PARTICLE CANVAS — mouse-reactive
+   Nodes drift on a slow random walk; the cursor gently attracts nearby nodes
+   and brightens the links around it. Node radii pulse subtly so the field
+   breathes even when the mouse is still.
 ═════════════════════════════════════════ */
 function ParticleCanvas({ isLight }) {
   const canvasRef = useRef(null)
-  const stateRef  = useRef({ nodes: [], raf: null })
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const N   = 42
+    const c = canvasRef.current
+    if (!c) return
+    const ctx = c.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    const host = c.parentElement
 
-    const resize = () => {
-      canvas.width  = canvas.offsetWidth
-      canvas.height = canvas.offsetHeight
+    const size = () => {
+      const r = host.getBoundingClientRect()
+      c.width  = r.width  * dpr
+      c.height = r.height * dpr
+      c.style.width  = r.width  + 'px'
+      c.style.height = r.height + 'px'
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
-    resize()
-    window.addEventListener('resize', resize)
+    size()
+    const onResize = () => size()
+    window.addEventListener('resize', onResize)
 
-    stateRef.current.nodes = Array.from({ length: N }, () => ({
-      x:  Math.random() * canvas.width,
-      y:  Math.random() * canvas.height,
-      vx: (Math.random() - .5) * .36,
-      vy: (Math.random() - .5) * .36,
-      r:  Math.random() * 2.6 + 1.2,
+    const W = () => c.width / dpr
+    const H = () => c.height / dpr
+    const N = 60
+    const pts = Array.from({ length: N }, () => ({
+      x: Math.random() * W(),
+      y: Math.random() * H(),
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: (Math.random() - 0.5) * 0.35,
+      ph: Math.random() * Math.PI * 2,
     }))
 
-    const ac = isLight ? [37, 88, 212] : [59, 110, 234]
+    const mouse = { x: -9999, y: -9999, active: false }
+    const onMove = e => {
+      const r = c.getBoundingClientRect()
+      mouse.x = e.clientX - r.left
+      mouse.y = e.clientY - r.top
+      mouse.active = true
+    }
+    const onLeave = () => { mouse.active = false; mouse.x = -9999; mouse.y = -9999 }
+    host.addEventListener('mousemove', onMove)
+    host.addEventListener('mouseleave', onLeave)
 
+    const lineCol = isLight ? '37,88,212' : '59,110,234'
+    const dotCol  = isLight ? '55,64,96'  : '155,168,200'
+
+    let raf, t = 0
     const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      const { nodes } = stateRef.current
+      t += 0.016
+      const w = W(), h = H()
+      ctx.clearRect(0, 0, w, h)
+
+      if (mouse.active) {
+        const g = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 180)
+        g.addColorStop(0, `rgba(${lineCol},${isLight ? 0.06 : 0.10})`)
+        g.addColorStop(1, `rgba(${lineCol},0)`)
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, w, h)
+      }
+
       for (let i = 0; i < N; i++) {
+        const p = pts[i]
+        p.x += p.vx
+        p.y += p.vy
+        if (p.x < 0 || p.x > w) p.vx *= -1
+        if (p.y < 0 || p.y > h) p.vy *= -1
+
+        if (mouse.active) {
+          const dx = mouse.x - p.x, dy = mouse.y - p.y
+          const dist = Math.hypot(dx, dy)
+          if (dist < 200 && dist > 0.5) {
+            const f = (1 - dist / 200) * 0.06
+            p.vx += (dx / dist) * f
+            p.vy += (dy / dist) * f
+          }
+        }
+        p.vx *= 0.985
+        p.vy *= 0.985
+        const sp = Math.hypot(p.vx, p.vy)
+        if (sp < 0.12) {
+          p.vx += (Math.random() - 0.5) * 0.06
+          p.vy += (Math.random() - 0.5) * 0.06
+        }
+
         for (let j = i + 1; j < N; j++) {
-          const dx = nodes[i].x - nodes[j].x
-          const dy = nodes[i].y - nodes[j].y
-          const d  = Math.hypot(dx, dy)
-          if (d < 130) {
+          const q = pts[j]
+          const d = Math.hypot(p.x - q.x, p.y - q.y)
+          if (d < 145) {
+            const near = mouse.active
+              ? Math.max(0, 1 - Math.min(
+                  Math.hypot(mouse.x - p.x, mouse.y - p.y),
+                  Math.hypot(mouse.x - q.x, mouse.y - q.y)
+                ) / 220)
+              : 0
+            const base = 0.26 * (1 - d / 145)
+            ctx.strokeStyle = `rgba(${lineCol},${base + near * 0.5})`
+            ctx.lineWidth = 1 + near * 0.8
             ctx.beginPath()
-            ctx.moveTo(nodes[i].x, nodes[i].y)
-            ctx.lineTo(nodes[j].x, nodes[j].y)
-            ctx.strokeStyle = `rgba(${ac[0]},${ac[1]},${ac[2]},${(0.13*(1-d/130)).toFixed(3)})`
-            ctx.lineWidth = .8
+            ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y)
             ctx.stroke()
           }
         }
-      }
-      for (const n of nodes) {
+
+        const pr = 1.5 + Math.sin(t + p.ph) * 0.6
+        const glow = mouse.active ? Math.max(0, 1 - Math.hypot(mouse.x - p.x, mouse.y - p.y) / 200) : 0
+        ctx.fillStyle = glow > 0.02
+          ? `rgba(${lineCol},${0.55 + glow * 0.45})`
+          : `rgba(${dotCol},0.55)`
         ctx.beginPath()
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
-        ctx.fillStyle = isLight
-          ? `rgba(37,88,212,${(0.22+n.r*.03).toFixed(2)})`
-          : `rgba(59,110,234,${(0.45+n.r*.04).toFixed(2)})`
+        ctx.arc(p.x, p.y, pr + glow * 2, 0, Math.PI * 2)
         ctx.fill()
-        n.x += n.vx; n.y += n.vy
-        if (n.x < 0 || n.x > canvas.width)  n.vx *= -1
-        if (n.y < 0 || n.y > canvas.height) n.vy *= -1
       }
-      stateRef.current.raf = requestAnimationFrame(draw)
+      raf = requestAnimationFrame(draw)
     }
     draw()
 
     return () => {
-      window.removeEventListener('resize', resize)
-      if (stateRef.current.raf) cancelAnimationFrame(stateRef.current.raf)
+      if (raf) cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      host.removeEventListener('mousemove', onMove)
+      host.removeEventListener('mouseleave', onLeave)
     }
   }, [isLight])
 
@@ -122,21 +185,6 @@ function PCACanvas({ isLight }) {
 }
 
 /* ═════════════════════════════════════════
-   SCROLL REVEAL
-═════════════════════════════════════════ */
-function useReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll('.hp-reveal')
-    const io  = new IntersectionObserver(
-      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('hp-visible') }),
-      { threshold: 0.08 }
-    )
-    els.forEach(el => io.observe(el))
-    return () => io.disconnect()
-  }, [])
-}
-
-/* ═════════════════════════════════════════
    DATA
 ═════════════════════════════════════════ */
 const FEATURES = [
@@ -159,12 +207,12 @@ const ROLES = [
 ]
 
 const METRICS = [
-  { label:'Gini Coefficient', val:'0.74',   sub:'High inequality in commits',  bar:74,  cls:'' },
-  { label:'Bus Factor',       val:'2',      sub:'Critical knowledge risk',      bar:20,  cls:'red' },
-  { label:'KCI Score',        val:'0.41',   sub:'Moderate concentration',       bar:41,  cls:'green' },
-  { label:'Top Hotspot',      val:'app.py', sub:'247 modifications',            bar:88,  cls:'mono' },
-  { label:'Contributors',     val:'142',    sub:'Minimum 5 commits each',       bar:60,  cls:'green' },
-  { label:'Commits analyzed', val:'3,847',  sub:'Full history mined',           bar:100, cls:'' },
+  { label:'Gini Coefficient', val:0.74,    decimals:2, sub:'High inequality in commits',  bar:74,  cls:'' },
+  { label:'Bus Factor',       val:2,       decimals:0, sub:'Critical knowledge risk',     bar:20,  cls:'red' },
+  { label:'KCI Score',        val:0.41,    decimals:2, sub:'Moderate concentration',      bar:41,  cls:'green' },
+  { label:'Top Hotspot',      val:'app.py',            sub:'247 modifications',           bar:88,  cls:'mono' },
+  { label:'Contributors',     val:142,     decimals:0, sub:'Minimum 5 commits each',      bar:60,  cls:'green' },
+  { label:'Commits analyzed', val:3847,    decimals:0, sub:'Full history mined',          bar:100, cls:'' },
 ]
 
 /* ═════════════════════════════════════════
@@ -200,6 +248,7 @@ export default function Home() {
   const navigate = useNavigate()
   const location = useLocation()
   useReveal()
+  useEntrance('.hero-badge, .hero-h1, .hero-sub, .hero-island', 120, 80)
 
   /* ── handle OAuth error redirect from backend ── */
   useEffect(() => {
@@ -318,20 +367,20 @@ export default function Home() {
       <section className="hp-hero">
         <ParticleCanvas isLight={isLight} />
         <div className="hp-hero-inner">
-          <div className="hp-badge">
+          <div className="hp-badge hero-badge">
             <span className="hp-badge-dot" />
             Repository intelligence
           </div>
-          <h1 className="hp-h1">
+          <h1 className="hp-h1 hero-h1">
             Paste a repo.
             <span className="hp-h1-accent">See everything.</span>
           </h1>
-          <p className="hp-sub">
+          <p className="hp-sub hero-sub">
             Git history doesn't lie. Developer activity, knowledge concentration,
             architectural risks, and team roles — extracted automatically.
           </p>
 
-          <div className="hp-island" id="hp-input">
+          <div className="hp-island hero-island" id="hp-input">
             <div className="hp-island-label">
               {loading ? 'Analyzing repository' : 'Analyze a repository'}
             </div>
@@ -431,13 +480,24 @@ export default function Home() {
 
       {/* ══ STATS ══ */}
       <div className="hp-stats">
-        {[{n:'6',l:'Analysis dimensions'},{n:'18+',l:'Chart types'},{n:'15',l:'Metrics per developer'},{n:'7',l:'Roles detected'},{n:'Zero',l:'Auth required'}].map(({n,l}) => (
+        {[
+          { n: 6,      l: 'Analysis dimensions' },
+          { n: 18,     l: 'Chart types', suffix: '+' },
+          { n: 15,     l: 'Metrics per developer' },
+          { n: 7,      l: 'Roles detected' },
+          { n: 'Zero', l: 'Auth required' },
+        ].map(({ n, l, suffix }) => (
           <div className="hp-stat" key={l}>
-            <div className="hp-stat-n">{n}</div>
+            <div className="hp-stat-n">
+              {typeof n === 'number' ? <CountUp value={n} suffix={suffix || ''} /> : n}
+            </div>
             <div className="hp-stat-l">{l}</div>
           </div>
         ))}
       </div>
+
+      {/* ══ REPO TICKER (infinite marquee) ══ */}
+      <RepoTicker />
 
       {/* ══ FEATURES ══ */}
       <div className="hp-divider"/>
@@ -560,21 +620,7 @@ export default function Home() {
                 <div className="hp-t-dot" style={{background:'#27C93F'}}/>
                 <span className="hp-term-file">analysis.log — pallets/flask</span>
               </div>
-              <div className="hp-term-body">
-                <span className="hp-tl dim">$ git-analyzer run pallets/flask</span>
-                <span className="hp-tl gray">→ Cloning repository...</span>
-                <span className="hp-tl green">✓ 3,847 commits loaded</span>
-                <span className="hp-tl green">✓ 142 contributors found</span>
-                <span className="hp-tl gray">→ Computing 15 metrics / dev...</span>
-                <span className="hp-tl blue">{'  '}gini_coefficient = 0.74</span>
-                <span className="hp-tl amber">{'  '}⚠ bus_factor = 2 (critical)</span>
-                <span className="hp-tl gray">→ Detecting developer roles...</span>
-                <span className="hp-tl green">✓ Backend: 38 · Generalist: 24</span>
-                <span className="hp-tl green">✓ Tester: 8 · DevOps: 9</span>
-                <span className="hp-tl gray">→ Running K-Means + PCA...</span>
-                <span className="hp-tl green">✓ Dashboard ready in 4.2s</span>
-                <span className="hp-tl bright">{'  '}<span className="hp-cursor"/></span>
-              </div>
+              <TypewriterTerminal />
             </div>
           </div>
         </div>
@@ -589,18 +635,7 @@ export default function Home() {
             <div className="hp-s-title">What you will see</div>
             <div className="hp-s-sub">Real metrics from <span style={{fontFamily:'var(--mono)',color:'var(--ac)',fontSize:13}}>pallets/flask</span>.</div>
           </div>
-          <div className="hp-mets hp-reveal">
-            {METRICS.map(({label,val,sub,bar,cls}) => (
-              <div className="hp-mc" key={label}>
-                <div className="hp-mc-label">{label}</div>
-                <div className={`hp-mc-val${cls?' '+cls:''}`}>{val}</div>
-                <div className="hp-mc-sub">{sub}</div>
-                <div className="hp-mc-bar">
-                  <div className={`hp-mc-fill${cls&&cls!=='mono'?' '+cls:''}`} style={{width:`${bar}%`}}/>
-                </div>
-              </div>
-            ))}
-          </div>
+          <MetricsGrid />
         </div>
       </section>
 
@@ -625,5 +660,119 @@ export default function Home() {
       </footer>
 
     </>
+  )
+}
+
+/* ═════════════════════════════════════════
+   METRICS GRID — bars fill once scrolled into view
+═════════════════════════════════════════ */
+function MetricsGrid() {
+  const [ref, inView] = useInView()
+  return (
+    <div ref={ref} className="hp-mets hp-reveal">
+      {METRICS.map(({label,val,decimals,sub,bar,cls}) => (
+        <div className="hp-mc" key={label}>
+          <div className="hp-mc-label">{label}</div>
+          <div className={`hp-mc-val${cls?' '+cls:''}`}>
+            {typeof val === 'number'
+              ? <CountUp value={val} decimals={decimals || 0} />
+              : val}
+          </div>
+          <div className="hp-mc-sub">{sub}</div>
+          <div className="hp-mc-bar">
+            <div className={`hp-mc-fill${cls&&cls!=='mono'?' '+cls:''}`} style={{width: inView ? `${bar}%` : 0}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ═════════════════════════════════════════
+   REPO TICKER — infinite horizontal marquee
+═════════════════════════════════════════ */
+const TICKER_REPOS = [
+  'pallets/flask', 'django/django', 'torvalds/linux', 'vercel/next.js',
+  'facebook/react', 'rust-lang/rust', 'kubernetes/kubernetes', 'pytorch/pytorch',
+  'tensorflow/tensorflow', 'golang/go', 'nodejs/node', 'vuejs/core',
+]
+
+function RepoTicker() {
+  const row = [...TICKER_REPOS, ...TICKER_REPOS]
+  return (
+    <div className="hp-ticker">
+      <div className="hp-ticker-track">
+        {row.map((r, i) => (
+          <span className="hp-ticker-item" key={i}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5 }}>
+              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57"/>
+            </svg>
+            {r}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ═════════════════════════════════════════
+   TYPEWRITER TERMINAL — types each line char-by-char, then loops
+═════════════════════════════════════════ */
+const TERM_LINES = [
+  { c: 'dim',   text: '$ git-analyzer run pallets/flask' },
+  { c: 'gray',  text: '→ Cloning repository...' },
+  { c: 'green', text: '✓ 3,847 commits loaded' },
+  { c: 'green', text: '✓ 142 contributors found' },
+  { c: 'gray',  text: '→ Computing 15 metrics / dev...' },
+  { c: 'blue',  text: '  gini_coefficient = 0.74' },
+  { c: 'amber', text: '  ⚠ bus_factor = 2 (critical)' },
+  { c: 'gray',  text: '→ Detecting developer roles...' },
+  { c: 'green', text: '✓ Backend: 38 · Generalist: 24' },
+  { c: 'green', text: '✓ Tester: 8 · DevOps: 9' },
+  { c: 'gray',  text: '→ Running K-Means + PCA...' },
+  { c: 'green', text: '✓ Dashboard ready in 4.2s' },
+]
+
+function TypewriterTerminal() {
+  const [ref, inView] = useInView()
+  const [done, setDone] = useState([])
+  const [cur,  setCur]  = useState('')
+  const [li,   setLi]   = useState(0)
+  const [ci,   setCi]   = useState(0)
+
+  useEffect(() => {
+    if (!inView) return
+    if (li >= TERM_LINES.length) {
+      const hold = setTimeout(() => { setDone([]); setCur(''); setLi(0); setCi(0) }, 2600)
+      return () => clearTimeout(hold)
+    }
+    const line = TERM_LINES[li]
+    if (ci <= line.text.length) {
+      const speed = 16 + Math.random() * 26
+      const tm = setTimeout(() => { setCur(line.text.slice(0, ci)); setCi(ci + 1) }, speed)
+      return () => clearTimeout(tm)
+    }
+    const pause = setTimeout(() => {
+      setDone(d => [...d, line])
+      setCur('')
+      setLi(li + 1)
+      setCi(0)
+    }, 90 + (line.text.startsWith('→') ? 220 : 40))
+    return () => clearTimeout(pause)
+  }, [inView, li, ci])
+
+  const curColor = TERM_LINES[li]?.c || 'bright'
+  return (
+    <div className="hp-term-body" ref={ref}>
+      {done.map((l, i) => (
+        <span key={i} className={`hp-tl ${l.c}`}>{l.text || ' '}</span>
+      ))}
+      {li < TERM_LINES.length && (
+        <span className={`hp-tl ${curColor}`}>{cur}<span className="hp-cursor" /></span>
+      )}
+      {li >= TERM_LINES.length && (
+        <span className="hp-tl bright">{' '}<span className="hp-cursor" /></span>
+      )}
+    </div>
   )
 }

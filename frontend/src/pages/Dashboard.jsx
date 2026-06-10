@@ -10,22 +10,27 @@ import InterCommitTable from '../components/Charts/InterCommitTable'
 import TopDevModsChart from '../components/Charts/TopDevModsChart'
 import HotspotFilesChart from '../components/Charts/HotspotFilesChart'
 import ActivityHeatmap from '../components/Charts/ActivityHeatmap'
-import OwnershipTable from '../components/Charts/OwnershipTable'
-import OwnershipPlots from '../components/Charts/OwnershipPlots'
+import OwnershipConcentration from '../components/Charts/OwnershipConcentration'
 import CommitFrequencyChart from '../components/Charts/CommitFrequencyChart'
 import ArchitectureGraph from '../components/Charts/ArchitectureGraph'
 import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisualization'
 import ProjectRiskSummary, { downloadPDF } from '../components/Charts/ProjectRiskSummary'
 import OverviewSection from '../components/Charts/OverviewSection'
-import RepositoryTreemap from '../components/Charts/RepositoryTreemap'
 import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
 import DevelopersList from '../components/Charts/DevelopersList'
 import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
 import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
 import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
 import DeveloperScatterPlot from '../components/Charts/DeveloperScatterPlot'
+import KnowledgeRiskCards from '../components/Charts/KnowledgeRiskCards'
+import OrphanedFilesTable from '../components/Charts/OrphanedFilesTable'
+import LiveRiskTable from '../components/Charts/LiveRiskTable'
+import CollaborationNetwork from '../components/Charts/CollaborationNetwork'
+import CoChangeTable from '../components/Charts/CoChangeTable'
+import BusFactorTrendChart from '../components/Charts/BusFactorTrendChart'
 import TimelineCard from '../components/TimelineCard'
 import ComparisonList from '../components/ComparisonList'
+import MetricDetailModal, { SeeAllButton } from '../components/MetricDetailModal'
 import '../styles/Dashboard.css'
 import '../styles/Timeline.css'
 
@@ -161,12 +166,17 @@ class ErrorBoundary extends Component {
 /* ─────────────────────────────────────────
    CHART CARD COMPONENT
 ───────────────────────────────────────── */
-function ChartCard({ title, sub, children }) {
+function ChartCard({ title, sub, action, children }) {
   return (
     <div className="card">
       <div className="card-title">
         <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--t)' }}>{title}</span>
-        {sub && <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>{sub}</span>}
+        {(sub || action) && (
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {sub && <span style={{ fontSize: 10, color: 'var(--t3)', fontFamily: 'var(--mono)' }}>{sub}</span>}
+            {action}
+          </span>
+        )}
       </div>
       <div style={{ padding: '18px' }}>
         <ErrorBoundary>{children}</ErrorBoundary>
@@ -191,6 +201,86 @@ const tail = (path) => {
   const s = String(path || '')
   const parts = s.split('/')
   return parts.length > 2 ? '…/' + parts.slice(-2).join('/') : s
+}
+
+/* ─────────────────────────────────────────
+   "SEE ALL" — column definitions per metric
+   Cards keep their top-N chart/table; these power the full-data modal.
+───────────────────────────────────────── */
+const devName = (v) => (String(v).includes('@') ? String(v).split('@')[0] : String(v))
+const pct1 = (v) => `${(Number(v) * 100).toFixed(1)}%`
+const pctR = (v) => `${Math.round(Number(v) * 100)}%`
+const round0 = (v) => Math.round(Number(v) || 0)
+const fixed = (n) => (v) => (Number(v) || 0).toFixed(n)
+/* days (float) → "2d 5h 30m" broken into day / hour / minute */
+const fmtDuration = (days) => {
+  const d = Number(days)
+  if (!isFinite(d) || d <= 0) return '—'
+  const totalMin = Math.round(d * 24 * 60)
+  const dd = Math.floor(totalMin / 1440)
+  const hh = Math.floor((totalMin % 1440) / 60)
+  const mm = totalMin % 60
+  const parts = []
+  if (dd) parts.push(`${dd}d`)
+  if (hh) parts.push(`${hh}h`)
+  if (mm) parts.push(`${mm}m`)
+  return parts.join(' ') || '0m'
+}
+
+const DETAIL_COLS = {
+  kci: [
+    { key: 'file', label: 'File', mono: true },
+    { key: 'kci', label: 'KCI', numeric: true, align: 'right', width: '120px', render: pct1 },
+  ],
+  in_degree: [
+    { key: 'file', label: 'File', mono: true },
+    { key: 'in_degree', label: 'In-degree', numeric: true, align: 'right', width: '130px' },
+  ],
+  risk: [
+    { key: 'file', label: 'File', mono: true },
+    { key: 'risk_score', label: 'Risk score', numeric: true, align: 'right', width: '140px', render: fixed(4) },
+  ],
+  live_risk: [
+    { key: 'file', label: 'File', mono: true, width: '1.7fr' },
+    { key: 'risk_score', label: 'Risk', numeric: true, align: 'right', render: fixed(4) },
+    { key: 'kci', label: 'KCI', numeric: true, align: 'right', render: pctR },
+    { key: 'in_degree', label: 'In-deg', numeric: true, align: 'right' },
+    { key: 'months_idle', label: 'Idle (mo)', numeric: true, align: 'right', render: round0 },
+  ],
+  orphaned: [
+    { key: 'file', label: 'File', mono: true, width: '1.7fr' },
+    { key: 'owner', label: 'Last author', render: devName },
+    { key: 'ownership', label: 'Owns', numeric: true, align: 'right', render: pctR },
+    { key: 'lines', label: 'Lines', numeric: true, align: 'right' },
+    { key: 'months_inactive', label: 'Inactive (mo)', numeric: true, align: 'right', render: round0 },
+  ],
+  cochange: [
+    { key: 'file_a', label: 'File A', mono: true },
+    { key: 'file_b', label: 'File B', mono: true },
+    { key: 'co_changes', label: 'Together', numeric: true, align: 'right', width: '110px', render: (v) => `${v}×` },
+    { key: 'confidence', label: 'Always together', numeric: true, align: 'right', width: '160px', render: pctR },
+  ],
+  ownership: [
+    { key: 'file', label: 'File', mono: true },
+    { key: 'developer', label: 'Developer', render: devName },
+    { key: 'ownership', label: 'Ownership', numeric: true, align: 'right', width: '130px', render: pct1 },
+  ],
+  hotspots: [
+    { key: 'file', label: 'File', mono: true },
+    { key: 'modifications', label: 'Modifications', numeric: true, align: 'right', width: '150px' },
+  ],
+  top_devs: [
+    { key: 'developer', label: 'Developer', render: devName },
+    { key: 'commits', label: 'Commits', numeric: true, align: 'right', width: '130px' },
+  ],
+  top_devs_mods: [
+    { key: 'developer', label: 'Developer', render: devName },
+    { key: 'modifications', label: 'Modifications', numeric: true, align: 'right', width: '150px' },
+  ],
+  inter_commit: [
+    { key: 'developer', label: 'Developer', render: devName },
+    { key: 'median_days', label: 'Median interval', numeric: true, align: 'right', width: '170px', render: fmtDuration },
+  ],
 }
 
 /* ─────────────────────────────────────────
@@ -237,6 +327,7 @@ export default function Dashboard() {
   const [skillsData, setSkillsData]       = useState(null)
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [skillsError, setSkillsError]     = useState(null)
+  const [avatars, setAvatars]             = useState({})
   const [activeSection, setActiveSection] = useState('overview')
   const [isLight, setIsLight]             = useState(false)
   const navigate = useNavigate()
@@ -250,11 +341,19 @@ export default function Dashboard() {
     setRepoUrl(url || '')
   }, [navigate])
 
-  /* ── fetch skills (lazy: only starts when user first visits "Developer Roles") ── */
+  /* ── fetch skills (lazy: starts when user first visits "Developer Roles" or
+     "Developers", then keeps polling in the background until the job finishes —
+     independent of which tab is currently open, so the result never gets stuck
+     on "still analyzing" just because the user navigated away mid-analysis). ── */
+  const skillsKickedOff = useRef(false)
   useEffect(() => {
     if (!repoUrl) return
-    if (activeSection !== 'roles' && activeSection !== 'developers') return
-    if (skillsData) return  // already loaded — skip
+    if (skillsData) return  // already loaded — nothing to poll
+    // Only *start* polling once the user has visited a tab that needs skills.
+    if (!skillsKickedOff.current &&
+        activeSection !== 'roles' && activeSection !== 'developers') return
+
+    skillsKickedOff.current = true
     setSkillsLoading(true)
     setSkillsError(null)
 
@@ -296,6 +395,49 @@ export default function Dashboard() {
     return () => { cancelled = true; if (interval) clearInterval(interval) }
   }, [repoUrl, activeSection, skillsData])
 
+  /* ── fetch real GitHub profile photos (background job; progressive) ──
+     Kicks off when the user first opens the Developers tab, then polls every
+     few seconds, merging in photos as they resolve. Stops once the job is done. */
+  useEffect(() => {
+    if (!repoUrl || activeSection !== 'developers') return
+
+    let interval = null
+    let cancelled = false
+
+    const pollOnce = () =>
+      fetch(`http://localhost:5000/analyze/avatars/result?repo_url=${encodeURIComponent(repoUrl)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (cancelled) return false
+          if (data.avatars && Object.keys(data.avatars).length) setAvatars(data.avatars)
+          return data.status === 'done'
+        })
+        .catch(() => false)
+
+    const run = async () => {
+      // Idempotent: starts the job if not already running/done, returns current map.
+      await fetch('http://localhost:5000/analyze/avatars', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: repoUrl }),
+      }).then(r => r.json())
+        .then(data => { if (!cancelled && data.avatars && Object.keys(data.avatars).length) setAvatars(data.avatars) })
+        .catch(() => {})
+
+      if (cancelled) return
+      const done = await pollOnce()
+      if (done) return
+
+      interval = setInterval(async () => {
+        const finished = await pollOnce()
+        if (finished && interval) clearInterval(interval)
+      }, 4000)
+    }
+
+    run()
+    return () => { cancelled = true; if (interval) clearInterval(interval) }
+  }, [repoUrl, activeSection])
+
   const toggleTheme = useCallback(() => {
     setIsLight(v => {
       const next = !v
@@ -311,6 +453,17 @@ export default function Dashboard() {
     document.getElementById('dash-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  /* ── "See all" detail modal ── */
+  const [detail, setDetail] = useState(null)
+
+  /* Render a "See all (N)" button only when there's more data than the card
+     shows. `shown` is how many rows the card already displays. */
+  const seeAll = (cfg, shown = 10) => {
+    const count = cfg.count ?? (cfg.rows || []).length
+    if (count <= shown) return null
+    return <SeeAllButton count={count} onClick={() => setDetail(cfg)} />
+  }
+
   if (!results) return null
 
   const {
@@ -320,18 +473,24 @@ export default function Dashboard() {
     timeline = [],
     commit_frequency = [],
     gini = 0,
+    gini_effort = 0,
     lorenz = { x: [0, 1], y: [0, 1] },
     bus_factor = 0,
     kci = [],
     in_degree = [],
     risk_files = [],
+    live_risk_files = [],
+    orphaned_knowledge = {},
+    active_bus_factor = {},
+    collaboration = { nodes: [], edges: [] },
+    cochange_coupling = [],
+    health_trend = [],
     inter_commit = {},
     hotspot_files = [],
     dev_file_matrix = { developers: [], files: [], values: [] },
+    dev_file_matrix_full = { developers: [], files: [], values: [] },
     ownership_table = [],
-    ownership_plots = [],
     architecture = { nodes: [], edges: [] },
-    treemap = { ids: [], labels: [], parents: [], values: [], paths: [] },
     voronoi = { nodes: [], edges: [] },
     busfactor_simulation = { developers: [], simulation: [] },
     project_summary = { health_score: 0, risk_level: 'Unknown', insights: [], recommendations: [] },
@@ -393,7 +552,19 @@ export default function Dashboard() {
             <TimelineChart data={asPoints(current, timeline)} />
           )}
         </TimelineCard>
-        <ChartCard title="Inter-Commit Time (Days)">
+        <ChartCard
+          title="Inter-Commit Time (Days)"
+          action={seeAll({
+            title: 'Inter-Commit Time — all developers',
+            subtitle: 'Median days between commits — lower means more frequent',
+            fileName: 'inter_commit_time',
+            searchPlaceholder: 'Search developer…',
+            columns: DETAIL_COLS.inter_commit,
+            rows: Object.entries(inter_commit).map(([developer, v]) => ({ developer, median_days: parseFloat(v) })),
+            defaultSort: { key: 'median_days', dir: 'asc' },
+            note: 'Developers with 50+ commits.',
+          }, 0)}
+        >
           <InterCommitTable data={inter_commit} />
         </ChartCard>
       </div>
@@ -420,6 +591,15 @@ export default function Dashboard() {
           repoUrl={repoUrl}
           fallback={top_developers}
           aggregateLabel="commits"
+          headerAction={seeAll({
+            title: 'Developers by Commits — all',
+            subtitle: 'All-time ranking · bots & merge commits excluded',
+            fileName: 'developers_by_commits',
+            searchPlaceholder: 'Search developer…',
+            columns: DETAIL_COLS.top_devs,
+            rows: top_developers,
+            defaultSort: { key: 'commits', dir: 'desc' },
+          })}
         >
           {({ current, delta }) => (
             <>
@@ -432,6 +612,21 @@ export default function Dashboard() {
         </TimelineCard>
       </div>
 
+      {/* Effort-basis check: Gini by file-touches vs by lines added */}
+      <div style={{
+        display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
+        padding: '10px 16px', fontSize: 12, color: 'var(--t3)',
+        background: 'var(--color-surface, rgba(255,255,255,0.03))', borderRadius: 8,
+      }}>
+        <span><strong style={{ color: 'var(--t)' }}>Gini (file touches):</strong> {gini.toFixed(2)}</span>
+        <span><strong style={{ color: 'var(--t)' }}>Gini (lines added):</strong> {gini_effort.toFixed(2)}</span>
+        <span style={{ fontStyle: 'italic' }}>
+          {Math.abs(gini - gini_effort) < 0.1
+            ? 'Both bases agree — the inequality reading is robust.'
+            : 'The two bases differ — weighting by real effort changes the inequality picture.'}
+        </span>
+      </div>
+
       {/* Row 3 — Commit frequency full width */}
       <TimelineCard
         title="Developer Activity Over Time"
@@ -439,6 +634,12 @@ export default function Dashboard() {
         repoUrl={repoUrl}
         fallback={commit_frequency}
         aggregateLabel="active devs"
+        headerAction={
+          <SeeAllButton
+            label="See all"
+            onClick={() => switchSection('developers')}
+          />
+        }
       >
         {({ current }) => (
           <CommitFrequencyChart data={asSeries(current, commit_frequency)} />
@@ -452,6 +653,15 @@ export default function Dashboard() {
         repoUrl={repoUrl}
         fallback={top_devs_mods}
         aggregateLabel="modifications"
+        headerAction={seeAll({
+          title: 'Developers by File Modifications — all',
+          subtitle: 'All-time ranking · bots & merge commits excluded',
+          fileName: 'developers_by_modifications',
+          searchPlaceholder: 'Search developer…',
+          columns: DETAIL_COLS.top_devs_mods,
+          rows: top_devs_mods,
+          defaultSort: { key: 'modifications', dir: 'desc' },
+        })}
       >
         {({ current, delta }) => (
           <>
@@ -464,7 +674,20 @@ export default function Dashboard() {
       </TimelineCard>
 
       {/* Row 5 — Heatmap full width */}
-      <ChartCard title="Developer–File Activity Heatmap">
+      <ChartCard
+        title="Developer–File Activity Heatmap"
+        action={(dev_file_matrix_full.developers.length > dev_file_matrix.developers.length ||
+                 dev_file_matrix_full.files.length > dev_file_matrix.files.length) ? (
+          <SeeAllButton
+            count={dev_file_matrix_full.developers.length}
+            onClick={() => setDetail({
+              title: 'Developer–File Activity Heatmap — all',
+              subtitle: 'Churn (added + deleted lines) · all developers × 80 busiest files',
+              content: <ActivityHeatmap data={dev_file_matrix_full} />,
+            })}
+          />
+        ) : null}
+      >
         <ActivityHeatmap data={dev_file_matrix} />
       </ChartCard>
     </div>
@@ -477,17 +700,84 @@ export default function Dashboard() {
         title="Ownership & Bus Factor"
         sub="Who knows what — and what happens if they leave"
       />
+      <KnowledgeRiskCards
+        activeBusFactor={active_bus_factor}
+        orphanedKnowledge={orphaned_knowledge}
+      />
+      <ChartCard
+        title="Orphaned Knowledge — Files With No Active Owner"
+        action={seeAll({
+          title: 'Orphaned Knowledge — all files',
+          subtitle: 'Files whose dominant author has stopped contributing',
+          fileName: 'orphaned_files',
+          searchPlaceholder: 'Search file or author…',
+          searchKeys: ['file', 'owner'],
+          columns: DETAIL_COLS.orphaned,
+          rows: orphaned_knowledge.orphaned_files || [],
+          defaultSort: { key: 'ownership', dir: 'desc' },
+        })}
+      >
+        <OrphanedFilesTable data={orphaned_knowledge.orphaned_files} />
+      </ChartCard>
       <div className="grid-3">
-        <ChartCard title="Knowledge Concentration (KCI)">
+        <ChartCard
+          title="Knowledge Concentration (KCI)"
+          action={seeAll({
+            title: 'Knowledge Concentration (KCI) — all files',
+            subtitle: 'Files with ≥30 lines · higher KCI = more concentrated ownership',
+            fileName: 'kci_files',
+            searchPlaceholder: 'Search file…',
+            columns: DETAIL_COLS.kci,
+            rows: kci,
+            defaultSort: { key: 'kci', dir: 'desc' },
+          })}
+        >
           <KCITable data={kci} />
         </ChartCard>
-        <ChartCard title="Dependency In-Degree">
+        <ChartCard
+          title="Dependency In-Degree"
+          action={seeAll({
+            title: 'Dependency In-Degree — all files',
+            subtitle: 'How many files import each file (architectural importance)',
+            fileName: 'in_degree_files',
+            searchPlaceholder: 'Search file…',
+            columns: DETAIL_COLS.in_degree,
+            rows: in_degree,
+            defaultSort: { key: 'in_degree', dir: 'desc' },
+          })}
+        >
           <InDegreeTable data={in_degree} />
         </ChartCard>
-        <ChartCard title="Risk Analysis (KCI × In-Degree)">
+        <ChartCard
+          title="Risk Analysis (KCI × In-Degree)"
+          action={seeAll({
+            title: 'Risk Analysis (KCI × In-Degree) — all files',
+            subtitle: 'Files that are both architecturally central and concentrated',
+            fileName: 'risk_files',
+            searchPlaceholder: 'Search file…',
+            columns: DETAIL_COLS.risk,
+            rows: risk_files,
+            defaultSort: { key: 'risk_score', dir: 'desc' },
+          })}
+        >
           <RiskTable data={risk_files} />
         </ChartCard>
       </div>
+      <ChartCard
+        title="Live Risk (KCI × In-Degree × Recency)"
+        sub="recency-weighted — like Risk Analysis, but ranks recently-changed files higher"
+        action={seeAll({
+          title: 'Live Risk — all files',
+          subtitle: 'KCI × In-Degree × Recency — recently-changed fragile files rank higher',
+          fileName: 'live_risk_files',
+          searchPlaceholder: 'Search file…',
+          columns: DETAIL_COLS.live_risk,
+          rows: live_risk_files,
+          defaultSort: { key: 'risk_score', dir: 'desc' },
+        })}
+      >
+        <LiveRiskTable data={live_risk_files} />
+      </ChartCard>
       <TimelineCard
         title="Bus Factor Risk Simulation"
         sub="Window-based bus factor uses churn-weighted ownership (approximation)"
@@ -501,14 +791,23 @@ export default function Dashboard() {
           <BusFactorRiskVisualization data={current ?? busfactor_simulation} />
         )}
       </TimelineCard>
-      <div className="grid-2">
-        <ChartCard title="Line Ownership Table">
-          <OwnershipTable data={ownership_table} />
+      {health_trend && health_trend.length >= 2 && (
+        <ChartCard title="Bus Factor Over Time" sub="trailing window">
+          <BusFactorTrendChart data={health_trend} />
         </ChartCard>
-        <ChartCard title="Line Ownership Plots">
-          <OwnershipPlots data={ownership_plots} />
-        </ChartCard>
-      </div>
+      )}
+      <ChartCard
+        title="Line Ownership Concentration"
+        sub="Each bar = one file's lines split by owner · lead owner colored by bus-factor risk (green <30% · amber 30–60% · red >60%)"
+        action={seeAll({
+          title: 'Line Ownership Concentration — all files',
+          subtitle: "Every file, sorted by its lead owner's share of lines",
+          count: new Set(ownership_table.map(r => r.file)).size,
+          content: <OwnershipConcentration data={ownership_table} limit={Infinity} />,
+        }, 25)}
+      >
+        <OwnershipConcentration data={ownership_table} />
+      </ChartCard>
     </div>
   )
 
@@ -519,35 +818,31 @@ export default function Dashboard() {
         title="Code Churn & Hotspots"
         sub="Highest-churn files by modification frequency"
       />
-      <div className="grid-2">
-        <TimelineCard
-          title="Top Modified Files (Hotspots)"
-          metric="hotspots"
-          repoUrl={repoUrl}
-          fallback={hotspot_files}
-          aggregateLabel="modifications"
-        >
-          {({ current, delta }) => (
-            <>
-              <HotspotFilesChart data={asItems(current, hotspot_files)} />
-              {delta?.per_item && (
-                <ComparisonList items={delta.per_item} valueLabel="mods" keyShorten={tail} />
-              )}
-            </>
-          )}
-        </TimelineCard>
-        <TimelineCard
-          title="Repository File Hotspots (Treemap)"
-          metric="treemap"
-          repoUrl={repoUrl}
-          fallback={treemap}
-          aggregateLabel="modifications"
-        >
-          {({ current }) => (
-            <RepositoryTreemap data={asWhole(current, treemap)} />
-          )}
-        </TimelineCard>
-      </div>
+      <TimelineCard
+        title="Top Modified Files (Hotspots)"
+        metric="hotspots"
+        repoUrl={repoUrl}
+        fallback={hotspot_files}
+        aggregateLabel="modifications"
+        headerAction={seeAll({
+          title: 'Modified Files (Hotspots) — all',
+          subtitle: 'Unique commits touching each file · all-time',
+          fileName: 'hotspot_files',
+          searchPlaceholder: 'Search file…',
+          columns: DETAIL_COLS.hotspots,
+          rows: hotspot_files,
+          defaultSort: { key: 'modifications', dir: 'desc' },
+        })}
+      >
+        {({ current, delta }) => (
+          <>
+            <HotspotFilesChart data={asItems(current, hotspot_files)} />
+            {delta?.per_item && (
+              <ComparisonList items={delta.per_item} valueLabel="mods" keyShorten={tail} />
+            )}
+          </>
+        )}
+      </TimelineCard>
       <TimelineCard
         title="Import-Coupled File Hotspots (Voronoi)"
         metric="voronoi"
@@ -571,6 +866,25 @@ export default function Dashboard() {
       />
       <ChartCard title="Architecture Graph">
         <ArchitectureGraph data={architecture} />
+      </ChartCard>
+      <ChartCard title="Developer Collaboration Network" sub="who works on the same files">
+        <CollaborationNetwork data={collaboration} />
+      </ChartCard>
+      <ChartCard
+        title="Hidden Coupling — Files That Change Together"
+        sub="not linked by imports"
+        action={seeAll({
+          title: 'Hidden Coupling — all pairs',
+          subtitle: 'Files that change together but are not linked by an import',
+          fileName: 'hidden_coupling',
+          searchPlaceholder: 'Search file…',
+          searchKeys: ['file_a', 'file_b'],
+          columns: DETAIL_COLS.cochange,
+          rows: cochange_coupling,
+          defaultSort: { key: 'confidence', dir: 'desc' },
+        }, 15)}
+      >
+        <CoChangeTable data={cochange_coupling} />
       </ChartCard>
     </div>
   )
@@ -616,7 +930,19 @@ export default function Dashboard() {
           <ChartCard title="Developer Map — Skill Similarity (PCA)">
             <DeveloperScatterPlot developers={skillsData.developers} />
           </ChartCard>
-          <ChartCard title="Developer Skills Heatmap">
+          <ChartCard
+            title="Developer Skills Heatmap"
+            action={skillsData.developers.length > 20 ? (
+              <SeeAllButton
+                count={skillsData.developers.length}
+                onClick={() => setDetail({
+                  title: 'Developer Skills Heatmap — all developers',
+                  subtitle: 'Share of each developer’s work in every skill area',
+                  content: <SkillsHeatmap developers={skillsData.developers} limit={Infinity} />,
+                })}
+              />
+            ) : null}
+          >
             <SkillsHeatmap developers={skillsData.developers} />
           </ChartCard>
         </>
@@ -773,12 +1099,20 @@ export default function Dashboard() {
           className="dash-main"
           style={activeSection === 'developers' ? { padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : {}}
         >
-          {activeSection === 'developers'
-            ? <DevelopersList results={results} skillsData={skillsData} skillsLoading={skillsLoading} />
-            : (sectionMap[activeSection] || renderOverview)()
-          }
+          <div
+            key={activeSection}
+            className="dash-section-anim"
+            style={activeSection === 'developers' ? { flex: 1, minHeight: 0, display: 'flex' } : {}}
+          >
+            {activeSection === 'developers'
+              ? <DevelopersList results={{ ...results, avatars }} skillsData={skillsData} skillsLoading={skillsLoading} />
+              : (sectionMap[activeSection] || renderOverview)()
+            }
+          </div>
         </main>
       </div>
+
+      <MetricDetailModal detail={detail} onClose={() => setDetail(null)} />
     </>
   )
 }

@@ -1,4 +1,35 @@
 import { useState, useMemo } from 'react'
+import DevActivityTimeline from './DevActivityTimeline'
+
+/* Real GitHub photo with an initials-circle fallback (used when there's no
+   avatar URL or the image fails to load). */
+function Avatar({ dev, bg, size = 52, fontSize = 18, ring = true }) {
+  const [failed, setFailed] = useState(false)
+  const common = {
+    width: size, height: size, borderRadius: '50%', flexShrink: 0,
+    boxShadow: ring ? `0 0 0 3px ${bg}33` : undefined,
+  }
+  if (dev.avatar && !failed) {
+    return (
+      <img
+        src={dev.avatar}
+        alt={dev.developer}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        style={{ ...common, objectFit: 'cover', display: 'block' }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      ...common, background: bg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize, fontWeight: 700, color: '#fff',
+    }}>
+      {initials(dev.developer)}
+    </div>
+  )
+}
 
 const ROLE_COLOR = {
   'Frontend':   '#3B6EEA',
@@ -58,7 +89,8 @@ function SectionBox({ title, children }) {
   return (
     <div style={{
       background: 'var(--bg3)', border: '1px solid var(--b)',
-      borderRadius: 10, padding: '14px 16px', marginBottom: 14,
+      borderRadius: 10, padding: '14px 16px',
+      breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', marginBottom: 14,
     }}>
       <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase',
                     letterSpacing: '.1em', fontWeight: 700, marginBottom: 12 }}>
@@ -169,6 +201,10 @@ function buildDevMap(results, skillsData) {
   for (const [dev, days] of Object.entries(results.inter_commit || {}))
     ensure(dev).inter_commit_days = days
 
+  // per-developer monthly activity timeline — keyed by "Name <email>"
+  for (const [dev, points] of Object.entries(results.dev_timeline || {}))
+    ensure(dev).activity_timeline = points
+
   // top_developers — keyed by "Name <email>"
   for (const d of (results.top_developers || [])) {
     const e = ensure(d.developer)
@@ -206,6 +242,12 @@ function buildDevMap(results, skillsData) {
     if (!d.total_commits && d.total_commits_raw > 0) d.total_commits = d.total_commits_raw
   }
 
+  // Real GitHub profile pictures — avatars map is keyed by the same lowercased email
+  const avatars = results.avatars || {}
+  for (const [key, e] of Object.entries(map)) {
+    if (avatars[key]) e.avatar = avatars[key]
+  }
+
   return Object.values(map)
     .filter(d => d.developer && (d.total_commits > 0 || d.files_count > 0 || d.first_commit))
     .sort((a, b) => (b.total_commits || 0) - (a.total_commits || 0))
@@ -241,17 +283,11 @@ function DevProfile({ dev, skillsReady, repoEndDate }) {
     : null
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px' }}>
+    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '22px 24px' }}>
 
       {/* ── header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-        <div style={{
-          width: 52, height: 52, borderRadius: '50%', background: bg, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, fontWeight: 700, color: '#fff', boxShadow: `0 0 0 3px ${bg}33`,
-        }}>
-          {initials(dev.developer)}
-        </div>
+        <Avatar dev={dev} bg={bg} size={52} fontSize={18} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -335,6 +371,50 @@ function DevProfile({ dev, skillsReady, repoEndDate }) {
         {dev.avg_ownership > 0       && <StatPill label="Avg ownership" value={`${Math.round(dev.avg_ownership * 100)}%`} />}
         {dev.inter_commit_days > 0   && <StatPill label="Rhythm"        value={`/${fmtDays(dev.inter_commit_days)}`} />}
       </div>
+
+      {/* ── activity over time (full width, same as the global chart) ── */}
+      {dev.activity_timeline?.length > 0 && (
+        <SectionBox title="Activity Over Time">
+          <DevActivityTimeline points={dev.activity_timeline} />
+        </SectionBox>
+      )}
+
+      {/* ── detail sections — masonry columns so cards pack with no gaps ── */}
+      <div style={{ columnWidth: 340, columnGap: 14 }}>
+
+      {/* ── role confidence & specialization ── */}
+      {dev.role_confidence !== undefined && (
+        <SectionBox title="Role Confidence & Specialization">
+          <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>
+            Assigned role: <strong style={{ color: bg }}>{dev.role}</strong>
+            {dev.role_confidence < 0.25 && (
+              <span style={{ color: '#F59E0B', marginLeft: 8, fontSize: 11 }}>⚠ borderline</span>
+            )}
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ fontSize: 11, color: 'var(--t2)' }}>Confidence</span>
+              <span style={{ fontSize: 11, color: 'var(--t)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
+                {Math.round((dev.role_confidence || 0) * 100)}%
+              </span>
+            </div>
+            <Bar value={dev.role_confidence || 0} color="#3B6EEA" />
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ fontSize: 11, color: 'var(--t2)' }}>Specialization</span>
+              <span style={{ fontSize: 11, color: 'var(--t)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
+                {Math.round((dev.specialization || 0) * 100)}%
+              </span>
+            </div>
+            <Bar value={dev.specialization || 0} color="#A78BFA" />
+          </div>
+          <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10, fontStyle: 'italic', lineHeight: 1.5 }}>
+            Confidence = how clear-cut the role is (high = one dominant area).
+            Specialization = how narrow the work is (high = a single area; low = broad generalist).
+          </p>
+        </SectionBox>
+      )}
 
       {/* ── risk exposure ── */}
       {bfRank && (
@@ -471,6 +551,8 @@ function DevProfile({ dev, skillsReady, repoEndDate }) {
           })}
         </SectionBox>
       )}
+
+      </div>{/* end detail-sections grid */}
     </div>
   )
 }
@@ -501,7 +583,7 @@ export default function DevelopersList({ results, skillsData, skillsLoading }) {
   const repoEndDate  = results?.summary?.date_range?.end || null
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
+    <div style={{ display: 'flex', height: '100%', minHeight: 0, flex: 1, width: '100%' }}>
 
       {/* ── LEFT: searchable list ── */}
       <div style={{
@@ -571,13 +653,7 @@ export default function DevelopersList({ results, skillsData, skillsLoading }) {
                   {i + 1}
                 </div>
                 <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <div style={{
-                    width: 30, height: 30, borderRadius: '50%', background: bg,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: '#fff',
-                  }}>
-                    {initials(dev.developer)}
-                  </div>
+                  <Avatar dev={dev} bg={bg} size={30} fontSize={11} ring={false} />
                   {dev.last_commit && (
                     <div style={{
                       position: 'absolute', bottom: 0, right: 0,

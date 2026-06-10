@@ -1,4 +1,5 @@
 import { downloadPDF } from "./ProjectRiskSummary"
+import { CountUp } from "../../hooks/useMotion"
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 function relativeDays(days) {
@@ -81,7 +82,9 @@ function VerdictHero({ score, level, verdict, onDownloadPDF }) {
   return (
     <div className="overview-hero">
       <div className="overview-hero-score-block">
-        <div className="overview-hero-score" style={{ color }}>{score}</div>
+        <div className="overview-hero-score" style={{ color }}>
+          <CountUp value={score} dur={1100} />
+        </div>
         <div className="overview-hero-score-denom">/ 100</div>
       </div>
       <div className="overview-hero-body">
@@ -207,7 +210,7 @@ function DimensionBar({ label, score, info }) {
           {info && <InfoTip text={info} />}
           {label}
         </span>
-        <span className="overview-dim-score" style={{ color: c }}>{score}/100</span>
+        <span className="overview-dim-score" style={{ color: c }}><CountUp value={score} />/100</span>
       </div>
       <div className="overview-dim-track">
         <div className="overview-dim-fill" style={{ width: `${score}%`, background: c }} />
@@ -278,12 +281,12 @@ export default function OverviewSection({
       <div className="stat-grid">
         <ContextualStat
           label="Active Developers (90d)"
-          value={`${activity.active_devs_90d ?? 0}`}
+          value={<CountUp value={activity.active_devs_90d ?? 0} />}
           sub={`of ${activity.total_devs ?? summary.total_developers ?? 0} lifetime contributors`}
         />
         <ContextualStat
           label="Commits / Week (90d)"
-          value={activity.commits_per_week_90d ?? 0}
+          value={<CountUp value={activity.commits_per_week_90d ?? 0} />}
           sub={
             activity.trend === "flat"
               ? "Stable rate"
@@ -293,23 +296,23 @@ export default function OverviewSection({
         />
         <ContextualStat
           label="Total Commits"
-          value={(summary.total_commits ?? 0).toLocaleString()}
+          value={<CountUp value={summary.total_commits ?? 0} />}
           sub={`across ${formatAge(activity.project_age_days)}`}
         />
         <ContextualStat
           label="Files Analyzed"
-          value={(summary.total_files ?? 0).toLocaleString()}
+          value={<CountUp value={summary.total_files ?? 0} />}
           sub={`${(summary.total_modifications ?? 0).toLocaleString()} total modifications`}
         />
         <ContextualStat
           label="Bus Factor"
-          value={busFactor}
+          value={<CountUp value={busFactor} />}
           sub="Devs covering 50% of code"
           accent={busRisk === "danger" ? "var(--red)" : busRisk === "warning" ? "var(--amber)" : undefined}
         />
         <ContextualStat
           label="Gini Coefficient"
-          value={gini?.toFixed(2) ?? "—"}
+          value={gini != null ? <CountUp value={gini} decimals={2} /> : "—"}
           sub="0 = equal, 1 = skewed"
           accent={giniRisk === "danger" ? "var(--red)" : giniRisk === "warning" ? "var(--amber)" : undefined}
         />

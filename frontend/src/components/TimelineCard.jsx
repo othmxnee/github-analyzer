@@ -47,6 +47,8 @@ export default function TimelineCard({
   deltaPath = (delta) => delta?.aggregate,
   /** human label for the aggregate metric, e.g. "commits", "modifications" */
   aggregateLabel = 'total',
+  /** optional node rendered in the header controls row (e.g. a "See all" button) */
+  headerAction,
   children,
 }) {
   const [timeline, setTimeline] = useState(initialTimeline)
@@ -68,7 +70,8 @@ export default function TimelineCard({
       <div className="card-title tl-card-title">
         <span className="tl-card-title-text" style={{ fontWeight: 600, fontSize: 12, color: 'var(--t)' }}>{title}</span>
         {sub && <span className="tl-card-sub" style={{ fontSize: 10, color: 'var(--t3)', fontFamily: 'var(--mono)' }}>{sub}</span>}
-        <div className="tl-card-controls">
+        <div className="tl-card-controls" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {headerAction}
           <TimelineSelector
             value={timeline}
             onChange={setTimeline}

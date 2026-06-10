@@ -113,21 +113,21 @@ export default function TimelineSelector({ value, onChange, allowCompare = true 
 
   const choosePreset = (id) => {
     if (id === 'custom') {
-      // Open custom popover; keep dropdown showing the inputs
-      onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null })
+      // Open custom popover; keep dropdown showing the inputs.
+      // Comparison turns on automatically for any finite window.
+      onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: true })
       return
     }
-    onChange({ ...value, preset: id, start: null, end: null })
+    onChange({ ...value, preset: id, start: null, end: null, compare: false })
     setOpen(false)
   }
 
   const applyCustom = () => {
-    onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null })
+    onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: false })
     setOpen(false)
   }
 
   const label = describeTimeline(value)
-  const isCompareDisabled = value.preset === 'all'
 
   return (
     <div className="tl-selector" ref={popRef}>
@@ -147,63 +147,6 @@ export default function TimelineSelector({ value, onChange, allowCompare = true 
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-
-      {allowCompare && (
-        <div className="tl-compare-group">
-          <button
-            type="button"
-            className={`tl-compare ${value.compare && !isCompareDisabled ? 'tl-compare--on' : ''} ${isCompareDisabled ? 'tl-compare--disabled' : ''}`}
-            disabled={isCompareDisabled}
-            onClick={() => onChange({ ...value, compare: !value.compare })}
-            title={isCompareDisabled ? 'Pick a finite window to enable comparison' : 'Toggle comparison'}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 014-4h14" />
-              <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 01-4 4H3" />
-            </svg>
-            Compare
-          </button>
-
-          {value.compare && !isCompareDisabled && (
-            <div className="tl-mode" ref={modeRef}>
-              <button
-                type="button"
-                className={`tl-mode-pill ${modeOpen ? 'tl-mode-pill--open' : ''}`}
-                onClick={() => setModeOpen(o => !o)}
-                title="What to compare against"
-              >
-                <span className="tl-mode-prefix">to</span>
-                <span className="tl-mode-label">{compareModeLabel(value.compareMode || 'previous')}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {modeOpen && (
-                <div className="tl-pop tl-pop--mode">
-                  <div className="tl-pop-head">Compare against</div>
-                  {COMPARE_MODES.map(m => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`tl-pop-item tl-pop-item--mode ${value.compareMode === m.id ? 'tl-pop-item--active' : ''}`}
-                      onClick={() => {
-                        onChange({ ...value, compareMode: m.id })
-                        setModeOpen(false)
-                      }}
-                    >
-                      <div className="tl-pop-item-main">
-                        <span>{m.label}</span>
-                        {value.compareMode === m.id && <span className="tl-pop-check">✓</span>}
-                      </div>
-                      <div className="tl-pop-item-hint">{m.hint}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {open && (
         <div className="tl-pop">

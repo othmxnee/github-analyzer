@@ -12,7 +12,6 @@ import pandas as pd
 
 from services.analyzer import get_cleaned_data
 from utils.metrics import compute_gini, compute_lorenz
-from utils.treemap import build_treemap_data
 from utils.voronoi_treemap import build_voronoi_data
 
 
@@ -232,10 +231,6 @@ def _mean_payload(samples):
             avg_nodes.append(node)
         return {"nodes": avg_nodes, "edges": []}
 
-    if isinstance(first, dict) and "ids" in first:
-        # Treemap (legacy shape): just return first window as a placeholder for the chart
-        return first
-
     return first
 
 
@@ -408,14 +403,6 @@ def _metric_bus_factor(snapshot, start, end):
     }
 
 
-def _metric_treemap(snapshot, start, end):
-    df_files = _slice_by_date(snapshot["df_files"], start, end).copy()
-    if len(df_files) == 0:
-        return {"ids": [], "labels": [], "parents": [], "values": [], "paths": []}
-    df_files["file_id"] = df_files["path"].astype(str)
-    return build_treemap_data(df_files)
-
-
 def _metric_voronoi(snapshot, start, end):
     """Windowed Voronoi: file activity comes from the window; KCI/ownership
     overlays come from the global snapshot (line ownership can't be windowed
@@ -446,7 +433,6 @@ _METRICS = {
     "gini_lorenz":      {"fn": _metric_gini_lorenz,    "warn_min_days": 30},
     "new_returning":    {"fn": _metric_new_returning,  "warn_min_days": 14},
     "bus_factor":       {"fn": _metric_bus_factor,     "warn_min_days": 30},
-    "treemap":          {"fn": _metric_treemap,        "warn_min_days": 0},
     "voronoi":          {"fn": _metric_voronoi,        "warn_min_days": 0},
 }
 
@@ -641,7 +627,7 @@ def _build_delta(metric, current, previous):
         prev = previous.get("bus_factor", 0)
         return {"aggregate": {"current": cur, "previous": prev, "pct": _pct_delta(cur, prev), "abs_diff": int(cur - prev)}}
 
-    if metric in ("treemap", "voronoi"):
+    if metric == "voronoi":
         # Aggregate = total nodes / total value
         def _sum_values(data):
             nodes = data.get("nodes") if isinstance(data, dict) else None

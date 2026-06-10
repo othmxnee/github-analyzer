@@ -15,12 +15,14 @@ function TopDevModsChart({ data }) {
     return <p style={{ color: '#9ca3af' }}>No data available</p>
   }
 
+  const rows = data.slice(0, 10)
+
   const chartData = {
-    labels: data.map(d => d.developer.substring(0, 20) + (d.developer.length > 20 ? '...' : '')),
+    labels: rows.map(d => d.developer.substring(0, 20) + (d.developer.length > 20 ? '...' : '')),
     datasets: [
       {
         label: 'Modifications',
-        data: data.map(d => d.modifications),
+        data: rows.map(d => d.modifications),
         backgroundColor: 'rgba(102, 126, 234, 0.8)',
         borderColor: '#667eea',
         borderWidth: 1

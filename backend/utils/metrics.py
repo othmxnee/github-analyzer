@@ -238,7 +238,7 @@ def compute_in_degree(repo_root):
     return in_degree
 
 
-def compute_risk_score(kci_data, in_degree_data):
+def compute_risk_score(kci_data, in_degree_data, top_n=10):
     if not kci_data or not in_degree_data:
         return {}
     
@@ -268,8 +268,8 @@ def compute_risk_score(kci_data, in_degree_data):
         risk_scores[file] = indeg_norm * kci_data[file]
     
     sorted_risk = sorted(risk_scores.items(), key=lambda x: x[1], reverse=True)
-    
-    return dict(sorted_risk[:10])
+
+    return dict(sorted_risk[:top_n])
 
 
 def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
@@ -413,15 +413,23 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
         java_files.append(p)
 
     if java_files:
+        # Java imports use the fully qualified name from the file's "package"
+        # declaration, not its filesystem path, so a source-root prefix such as
+        # src/main/java must not appear in the index key. Read the declared
+        # package from each file and key the index by package + class name.
+        java_pkg_re = re.compile(r'^\s*package\s+([\w.]+)\s*;', re.MULTILINE)
         java_index: dict[str, str] = {}
+        java_simple: dict[str, list[str]] = {}
         for p in java_files:
             try:
                 file_id = str(p.relative_to(repo_root))
                 graph.add_node(file_id)
-                key = ".".join(p.relative_to(repo_root).with_suffix("").parts)
-                java_index[key] = file_id
-                java_index.setdefault(p.stem, file_id)
-            except ValueError:
+                content = p.read_text(encoding="utf8", errors="ignore")
+                m = java_pkg_re.search(content)
+                fqcn = f"{m.group(1)}.{p.stem}" if m else p.stem
+                java_index[fqcn] = file_id
+                java_simple.setdefault(p.stem, []).append(file_id)
+            except Exception:
                 pass
         java_imp_re = re.compile(r'^import\s+(?:static\s+)?([\w.]+?)(?:\.\*)?;', re.MULTILINE)
         for p in java_files:
@@ -429,7 +437,95 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
                 file_id = str(p.relative_to(repo_root))
                 content = p.read_text(encoding="utf8", errors="ignore")
                 for m in java_imp_re.finditer(content):
-                    target = java_index.get(m.group(1))
+                    imp = m.group(1)
+                    target = java_index.get(imp)
+                    if target is None:
+                        # static member import: drop the trailing member name
+                        # and retry against the enclosing class.
+                        head = imp.rsplit(".", 1)[0]
+                        target = java_index.get(head)
+                    if target and target != file_id:
+                        graph.add_edge(file_id, target)
+            except Exception:
+                pass
+
+    # ── Kotlin ───────────────────────────────────────────────────────────
+    kotlin_files = []
+    for p in repo_root.rglob("*.kt"):
+        try:
+            rel = p.relative_to(repo_root)
+        except ValueError:
+            continue
+        if any(part.lower().startswith(pfx) for part in rel.parts for pfx in ignored_prefixes):
+            continue
+        kotlin_files.append(p)
+
+    if kotlin_files:
+        # Unlike Java, a Kotlin file's name need not match the types it holds:
+        # one .kt file may declare several top-level classes/functions, and an
+        # import such as `import org.fdroid.data.AppDao` names a *declaration*
+        # in a package, not a file path. So index every file by the
+        # fully-qualified name of each top-level declaration it contains
+        # (resolved against the file's `package`), plus by package (for
+        # `import pkg.*`) and by the package-qualified file stem as a fallback
+        # for the common case where a file is named after its primary class.
+        kt_pkg_re = re.compile(r'^\s*package\s+([\w.]+)', re.MULTILINE)
+        kt_type_re = re.compile(
+            r'^(?:(?:public|internal|private|protected|abstract|final|open|sealed|'
+            r'data|enum|annotation|value|expect|actual|fun)\s+)*'
+            r'(?:class|interface|object|typealias)\s+([A-Za-z_]\w*)',
+            re.MULTILINE,
+        )
+        kt_callable_re = re.compile(
+            r'^(?:(?:public|internal|private|protected|inline|suspend|operator|'
+            r'infix|tailrec|external|const|open|override|expect|actual)\s+)*'
+            r'(?:fun|val|var)\s+'
+            r'(?:<[^>]*>\s+)?'            # generic params:   fun <T> foo
+            r'(?:[A-Za-z_][\w.]*\.)?'     # extension receiver: fun String.bar
+            r'([A-Za-z_]\w*)',
+            re.MULTILINE,
+        )
+        kt_index: dict[str, str] = {}            # fully-qualified decl -> file
+        kt_pkg_files: dict[str, list[str]] = {}  # package -> [files]
+        for p in kotlin_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                graph.add_node(file_id)
+                content = p.read_text(encoding="utf8", errors="ignore")
+                m = kt_pkg_re.search(content)
+                prefix = f"{m.group(1)}." if m else ""
+                kt_pkg_files.setdefault(m.group(1) if m else "", []).append(file_id)
+                for dm in kt_type_re.finditer(content):
+                    kt_index.setdefault(prefix + dm.group(1), file_id)
+                for cm in kt_callable_re.finditer(content):
+                    kt_index.setdefault(prefix + cm.group(1), file_id)
+                kt_index.setdefault(prefix + p.stem, file_id)  # file-stem fallback
+            except Exception:
+                pass
+
+        kt_imp_re = re.compile(r'^\s*import\s+([^\s;]+)', re.MULTILINE)
+        for p in kotlin_files:
+            try:
+                file_id = str(p.relative_to(repo_root))
+                content = p.read_text(encoding="utf8", errors="ignore")
+                for m in kt_imp_re.finditer(content):
+                    imp = m.group(1)
+                    if imp.endswith(".*"):
+                        # Wildcard: depend on every file in the imported package.
+                        for tf in kt_pkg_files.get(imp[:-2], []):
+                            if tf != file_id:
+                                graph.add_edge(file_id, tf)
+                        continue
+                    target = kt_index.get(imp)
+                    if target is None:
+                        # Imported a nested class or companion member
+                        # (e.g. `import pkg.Outer.Inner`): drop trailing
+                        # segments and retry against the enclosing declaration.
+                        parts = imp.split(".")
+                        for cut in range(len(parts) - 1, 0, -1):
+                            target = kt_index.get(".".join(parts[:cut]))
+                            if target:
+                                break
                     if target and target != file_id:
                         graph.add_edge(file_id, target)
             except Exception:
@@ -456,19 +552,60 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
                 go_dir_files.setdefault(dir_key, []).append(file_id)
             except ValueError:
                 pass
-        go_rel_re = re.compile(r'"(\./[^"]+|\.\.\/[^"]+)"')
+
+        # Read the module path from go.mod. Idiomatic Go imports a package by
+        # its full module path (e.g. "github.com/gin-gonic/gin/render"), not
+        # by a relative path, so resolving in-repo imports means stripping the
+        # module prefix and mapping the remainder to a package directory.
+        go_module = None
+        go_mod = repo_root / "go.mod"
+        if go_mod.exists():
+            try:
+                for line in go_mod.read_text(encoding="utf8", errors="ignore").splitlines():
+                    line = line.strip()
+                    if line.startswith("module "):
+                        go_module = line[len("module "):].strip()
+                        break
+            except Exception:
+                go_module = None
+
+        # A Go import targets a package (a directory), not a single file, so
+        # each imported package is represented by one file. Pick that file
+        # deterministically and prefer a non-test file, otherwise the whole
+        # package's in-degree can land on an arbitrary "_test.go" file.
+        def _is_test_go(name: str) -> bool:
+            return name.endswith("_test.go")
+
+        go_dir_repr: dict[str, str] = {}
+        for dir_rel, files in go_dir_files.items():
+            non_test = sorted(f for f in files if not _is_test_go(f.rsplit("/", 1)[-1]))
+            chosen = non_test[0] if non_test else sorted(files)[0]
+            go_dir_repr[dir_rel] = chosen
+
+        # Captures every quoted import spec; relative ("./", "../") and
+        # module-path imports are both handled below.
+        go_imp_re = re.compile(r'"([^"]+)"')
         for p in go_files:
             try:
                 file_id = str(p.relative_to(repo_root))
                 content = p.read_text(encoding="utf8", errors="ignore")
-                for m in go_rel_re.finditer(content):
-                    target_dir = (p.parent / m.group(1)).resolve()
-                    try:
-                        dir_rel = str(target_dir.relative_to(repo_root))
-                        for tf in go_dir_files.get(dir_rel, [])[:1]:
-                            graph.add_edge(file_id, tf)
-                    except ValueError:
-                        pass
+                for m in go_imp_re.finditer(content):
+                    spec = m.group(1)
+                    dir_rel = None
+                    if spec.startswith("./") or spec.startswith("../"):
+                        target_dir = (p.parent / spec).resolve()
+                        try:
+                            dir_rel = str(target_dir.relative_to(repo_root))
+                        except ValueError:
+                            dir_rel = None
+                    elif go_module and (spec == go_module or spec.startswith(go_module + "/")):
+                        sub = spec[len(go_module):].lstrip("/")
+                        dir_rel = sub if sub else "."
+                    if dir_rel is None:
+                        continue
+                    tf = go_dir_repr.get(dir_rel)
+                    if tf and tf != file_id:
+                        graph.add_edge(file_id, tf)
             except Exception:
                 pass
 

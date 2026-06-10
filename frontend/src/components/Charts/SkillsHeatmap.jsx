@@ -28,15 +28,15 @@ function heatColor(value) {
   }
 }
 
-export default function SkillsHeatmap({ developers }) {
+export default function SkillsHeatmap({ developers, limit = 20 }) {
   if (!developers || developers.length === 0) {
     return <p style={{ color: 'var(--color-text-muted)' }}>No developer data available.</p>
   }
 
-  // Show top 20 by commits
+  // Most active by commits — capped to `limit` on the card, all in the modal
   const top = [...developers]
     .sort((a, b) => b.total_commits - a.total_commits)
-    .slice(0, 20)
+    .slice(0, limit)
 
   const cellSize  = 52
   const rowHeight = 36

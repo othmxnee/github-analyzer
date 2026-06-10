@@ -89,7 +89,6 @@ body.lm .hp-nav { background: rgba(239,241,247,0.92); }
   padding: 6px 16px; border-radius: 20px;
   margin-bottom: 28px; font-weight: 700;
   font-family: var(--f);
-  animation: hpFadeUp .5s ease both;
 }
 .hp-badge-dot {
   width: 5px; height: 5px; border-radius: 50%;
@@ -105,15 +104,21 @@ body.lm .hp-nav { background: rgba(239,241,247,0.92); }
   font-weight: 700; color: var(--t);
   line-height: 1.04; letter-spacing: -.035em;
   margin-bottom: 20px;
-  animation: hpFadeUp .5s .1s ease both;
 }
-.hp-h1-accent { color: var(--ac); display: block; }
+.hp-h1-accent {
+  color: var(--ac); display: block; position: relative;
+  text-shadow: 0 0 0 rgba(59,110,234,0);
+  animation: hpAccentGlow 3.4s ease-in-out 1.2s infinite;
+}
+@keyframes hpAccentGlow {
+  0%, 100% { text-shadow: 0 0 18px rgba(59,110,234,0.18); }
+  50%      { text-shadow: 0 0 32px rgba(59,110,234,0.45); }
+}
 
 .hp-sub {
   font-family: var(--f);
   font-size: 15px; color: var(--t2); line-height: 1.75;
   max-width: 460px; margin: 0 auto 40px;
-  animation: hpFadeUp .5s .2s ease both;
 }
 
 /* ════════════════════════════════════════
@@ -125,7 +130,6 @@ body.lm .hp-nav { background: rgba(239,241,247,0.92); }
   border-radius: 16px;
   padding: 22px 24px 18px;
   max-width: 540px; width: 100%; margin: 0 auto;
-  animation: hpFadeUp .5s .3s ease both;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
@@ -292,6 +296,36 @@ body.lm .hp-island {
 }
 
 /* ════════════════════════════════════════
+   REPO TICKER — infinite marquee
+════════════════════════════════════════ */
+.hp-ticker {
+  overflow: hidden;
+  border-bottom: 1px solid var(--b);
+  background: var(--bg2);
+  padding: 14px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.hp-ticker-track {
+  display: flex;
+  gap: 40px;
+  width: max-content;
+  animation: hpTickerScroll 38s linear infinite;
+  will-change: transform;
+}
+.hp-ticker:hover .hp-ticker-track { animation-play-state: paused; }
+.hp-ticker-item {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 13px; color: var(--t3);
+  white-space: nowrap; transition: color .2s;
+}
+.hp-ticker-item:hover { color: var(--ac); }
+@keyframes hpTickerScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ════════════════════════════════════════
    SECTIONS BASE
 ════════════════════════════════════════ */
 .hp-section { padding: 88px 40px; position: relative; background: var(--bg); }
@@ -323,9 +357,18 @@ body.lm .hp-island {
   gap: 1px; background: var(--b);
   border: 1px solid var(--b); border-radius: var(--rl); overflow: hidden;
 }
-.hp-feat { background: var(--bg); padding: 28px; transition: background .2s; }
+.hp-feat {
+  background: var(--bg); padding: 28px;
+  transition: background .2s, transform .25s var(--ease-out, ease), box-shadow .25s var(--ease-out, ease);
+}
 body.lm .hp-feat { background: #fff; }
-.hp-feat:hover { background: var(--surf2); }
+.hp-feat:hover {
+  background: var(--surf2);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.28);
+}
+.hp-feat-ico { transition: transform .25s var(--ease-out, ease); }
+.hp-feat:hover .hp-feat-ico { transform: scale(1.08); }
 
 .hp-feat-ico {
   width: 36px; height: 36px; border-radius: var(--r);
@@ -344,9 +387,12 @@ body.lm .hp-feat { background: #fff; }
 .hp-role {
   background: var(--surf); border: 1px solid var(--b);
   border-radius: var(--rl); padding: 20px 18px;
-  transition: border-color .2s, background .2s;
+  transition: border-color .2s, background .2s, transform .25s var(--ease-out, ease);
 }
-.hp-role:hover { border-color: var(--bs); background: var(--surf2); }
+.hp-role:hover {
+  border-color: var(--bs); background: var(--surf2);
+  transform: translateY(-2px);
+}
 .hp-role-dot { width: 8px; height: 8px; border-radius: 50%; margin-bottom: 14px; }
 .hp-role-name { font-size: 13px; font-weight: 600; color: var(--t); margin-bottom: 6px; }
 .hp-role-desc { font-size: 11px; color: var(--t2); line-height: 1.65; margin-bottom: 12px; }
@@ -438,9 +484,13 @@ body.lm .hp-step { background: #fff; }
 .hp-mc {
   background: var(--bg3); border: 1px solid var(--b);
   border-radius: var(--rl); padding: 22px 20px;
-  transition: border-color .2s;
+  transition: border-color .2s, transform .25s var(--ease-out, ease), box-shadow .25s var(--ease-out, ease);
 }
-.hp-mc:hover { border-color: var(--bs); }
+.hp-mc:hover {
+  border-color: var(--bs);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.28);
+}
 .hp-mc-label {
   font-size: 10px; color: var(--t3);
   text-transform: uppercase; letter-spacing: .1em;
@@ -456,7 +506,10 @@ body.lm .hp-step { background: #fff; }
 .hp-mc-val.mono  { font-size: 18px; padding-top: 6px; }
 .hp-mc-sub { font-size: 11px; color: var(--t2); margin-top: 5px; }
 .hp-mc-bar { height: 3px; background: var(--b); border-radius: 2px; margin-top: 16px; overflow: hidden; }
-.hp-mc-fill { height: 100%; border-radius: 2px; background: var(--ac); }
+.hp-mc-fill {
+  height: 100%; border-radius: 2px; background: var(--ac);
+  transition: width 1.2s var(--ease-out, ease);
+}
 .hp-mc-fill.green { background: var(--green); }
 .hp-mc-fill.red   { background: var(--red); }
 

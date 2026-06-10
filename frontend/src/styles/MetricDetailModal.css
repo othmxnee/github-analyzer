@@ -1,0 +1,174 @@
+/* MetricDetailModal — reusable "See all" overlay */
+
+.mdm-seeall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--f);
+  color: var(--ac);
+  background: var(--ac-d);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 5px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mdm-seeall svg { opacity: 0.9; }
+.mdm-seeall:hover {
+  background: var(--ac);
+  color: #fff;
+  border-color: var(--ac);
+}
+
+/* Custom-content mode (e.g. a full heatmap inside the modal) */
+.mdm-custom {
+  overflow: auto;
+  max-height: 74vh;
+  padding: 16px 18px;
+}
+
+.mdm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(3, 5, 10, 0.66);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.mdm-panel {
+  width: min(880px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.mdm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--b);
+}
+.mdm-title-wrap { display: flex; flex-direction: column; gap: 3px; }
+.mdm-title { font-size: 14px; font-weight: 600; color: var(--t); }
+.mdm-sub { font-size: 11px; color: var(--t3); font-family: var(--mono); }
+
+.mdm-close {
+  margin-left: auto;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--b);
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.mdm-close:hover { background: var(--surf); color: var(--t); }
+
+.mdm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--b);
+}
+.mdm-search {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  padding: 7px 11px;
+  color: var(--t);
+  font-size: 12px;
+  font-family: var(--f);
+  outline: none;
+}
+.mdm-search:focus { border-color: var(--ac); }
+.mdm-count { font-size: 11px; color: var(--t3); font-family: var(--mono); white-space: nowrap; }
+.mdm-export {
+  flex: none;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--t);
+  background: var(--surf);
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.mdm-export:hover:not(:disabled) { border-color: var(--ac); color: var(--ac); }
+.mdm-export:disabled { opacity: 0.45; cursor: default; }
+
+.mdm-table { display: flex; flex-direction: column; min-height: 0; }
+
+.mdm-row { align-items: center; }
+
+.mdm-header-row {
+  border-bottom: 1px solid var(--b);
+  background: var(--bg3);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.mdm-th {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 12px;
+  background: transparent;
+  border: none;
+  color: var(--t3);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-align: left;
+}
+.mdm-th.right { justify-content: flex-end; }
+.mdm-th:hover { color: var(--t); }
+.mdm-arrow { font-size: 8px; color: var(--ac); }
+
+.mdm-body { overflow-y: auto; }
+
+.mdm-body .mdm-row { border-bottom: 1px solid var(--b); }
+.mdm-body .mdm-row:hover { background: var(--surf); }
+
+.mdm-td {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--t);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+.mdm-td.right { justify-content: flex-end; }
+.mdm-td.mono { font-family: var(--mono); font-size: 11px; }
+
+.mdm-empty { padding: 28px; text-align: center; color: var(--t3); font-size: 12px; }
+
+.mdm-note {
+  padding: 11px 18px;
+  border-top: 1px solid var(--b);
+  font-size: 11px;
+  color: var(--t3);
+  font-style: italic;
+}

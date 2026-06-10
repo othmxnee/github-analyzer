@@ -1,8 +1,11 @@
 from pydriller import Repository
 from utils.skill_metrics import compute_skill_metrics
+from utils.bot_detection import is_bot
+from utils.identity import build_identity_map, canonicalize_email
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 import numpy as np
 import threading
 
@@ -16,6 +19,16 @@ def provide_commits_data(repo_url: str, commits_data: list) -> None:
     pass
 
 
+def set_prebuilt_commits(repo_url: str, prebuilt: list) -> None:
+    """Stash skill-input commits built by the main analysis (which already
+    cloned the repo). The skills pipeline then runs on this instead of
+    re-cloning and re-traversing the whole history — the slow part. Each entry
+    is a (name, email, message, date, modified_files) tuple, already filtered
+    for merges and bots."""
+    if prebuilt:
+        _commits_cache[repo_url] = prebuilt
+
+
 def invalidate_for_repo(repo_url: str) -> None:
     """Called by analyzer.start_analysis when a re-analysis is triggered,
     so skills re-runs with fresh full-history data instead of returning stale cache."""
@@ -24,7 +37,7 @@ def invalidate_for_repo(repo_url: str) -> None:
     _cache.pop(repo_url, None)
 
 FEATURE_COLS = [
-    'pct_frontend', 'pct_backend', 'pct_test', 'pct_devops',
+    'pct_frontend', 'pct_backend', 'pct_mobile', 'pct_test', 'pct_devops',
     'pct_docs', 'pct_build',
     'kw_frontend', 'kw_backend', 'kw_test', 'kw_devops', 'kw_docs'
 ]
@@ -46,6 +59,69 @@ def _run_clustering(rows, n_clusters=4):
     for i, row in enumerate(rows):
         row['cluster'] = int(labels[i])
     return rows
+
+
+def _cluster_validation(rows, k_used, k_min=2, k_max=6):
+    """Silhouette analysis to justify the number of clusters.
+
+    Returns the silhouette score for every candidate k and the k that scores
+    best, so the choice of k=4 can be defended (or revisited) rather than left
+    as an unexplained constant. The actual clustering still uses ``k_used``;
+    this is reporting only, so role assignments don't shift under our feet.
+    """
+    n = len(rows)
+    if n < 3:
+        return {"scores": [], "best_k": k_used, "k_used": k_used,
+                "note": "Too few developers for silhouette analysis."}
+
+    X = np.array([[r.get(f, 0) for f in FEATURE_COLS] for r in rows])
+    X_scaled = MinMaxScaler().fit_transform(X)
+
+    scores = []
+    upper = min(k_max, n - 1)
+    for k in range(k_min, upper + 1):
+        try:
+            labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X_scaled)
+            if len(set(labels)) < 2:
+                continue
+            score = float(silhouette_score(X_scaled, labels))
+            scores.append({"k": k, "silhouette": round(score, 3)})
+        except Exception:
+            continue
+
+    best_k = max(scores, key=lambda s: s["silhouette"])["k"] if scores else k_used
+    return {"scores": scores, "best_k": best_k, "k_used": k_used}
+
+
+def _cluster_profiles(rows):
+    """Describe each cluster by its average feature profile (its archetype).
+
+    More honest than naming a cluster after a borrowed rule-role: the centroid
+    says what the cluster actually does (e.g. "high test + backend").
+    """
+    _PRETTY = {
+        'pct_frontend': 'frontend', 'pct_backend': 'backend', 'pct_mobile': 'mobile',
+        'pct_test': 'testing', 'pct_devops': 'devops', 'pct_docs': 'docs',
+        'pct_build': 'build', 'kw_frontend': 'frontend (msgs)',
+        'kw_backend': 'backend (msgs)', 'kw_test': 'testing (msgs)',
+        'kw_devops': 'devops (msgs)', 'kw_docs': 'docs (msgs)',
+    }
+    by_cluster = {}
+    for row in rows:
+        by_cluster.setdefault(row.get('cluster', 0), []).append(row)
+
+    profiles = []
+    for c, members in sorted(by_cluster.items()):
+        means = {f: float(np.mean([m.get(f, 0) for m in members])) for f in FEATURE_COLS}
+        top = sorted(means.items(), key=lambda x: x[1], reverse=True)[:2]
+        label = " + ".join(_PRETTY.get(f, f) for f, v in top if v > 0.01) or "mixed"
+        profiles.append({
+            "cluster": int(c),
+            "size": len(members),
+            "label": label,
+            "centroid": {k: round(v, 3) for k, v in means.items()},
+        })
+    return profiles
 
 
 def _resolve_generalists(rows):
@@ -166,30 +242,51 @@ def _run_analysis(repo_url):
         import re as _re
         from collections import Counter, defaultdict
 
+        # Prefer commit data prebuilt by the main analysis (no re-clone). Fall
+        # back to traversing the repo only if that cache is empty (e.g. the
+        # server restarted since the repo was analysed).
+        raw_commits = _commits_cache.get(repo_url)   # (name, email, msg, date, modified_files)
+        if not raw_commits:
+            raw_commits = []
+            for commit in Repository(repo_url).traverse_commits():
+                # Skip merge commits and bot/non-human accounts, matching the
+                # activity pipeline's filtering so roles are computed over real,
+                # hand-authored work only.
+                if commit.merge:
+                    continue
+                email = (commit.author.email or '').strip().lower()
+                if not email or is_bot(email):
+                    continue
+                modified_files = []
+                for f in commit.modified_files:
+                    path = f.new_path or f.old_path
+                    modified_files.append({
+                        'path': path,
+                        'added': f.added_lines or 0,
+                        'deleted': f.deleted_lines or 0,
+                    })
+                raw_commits.append(
+                    (commit.author.name, email, commit.msg, commit.author_date, modified_files)
+                )
+
+        # Merge a contributor's multiple emails into one canonical identity so
+        # roles aren't split across aliases (same map logic as the activity
+        # pipeline; see utils.identity).
+        identity_map = build_identity_map((name, email) for name, email, *_ in raw_commits)
+
         commits_data = []
         dates_by_dev = defaultdict(list)
         msgs_by_dev = defaultdict(list)
-
-        for commit in Repository(repo_url).traverse_commits():
-            email = (commit.author.email or '').strip().lower()
-            if not email:
-                continue
-            modified_files = []
-            for f in commit.modified_files:
-                path = f.new_path or f.old_path
-                modified_files.append({
-                    'path': path,
-                    'added': f.added_lines or 0,
-                    'deleted': f.deleted_lines or 0,
-                })
+        for name, email, msg, date, modified_files in raw_commits:
+            email = canonicalize_email(email, identity_map)
             commits_data.append({
                 'author_email': email,
-                'message': commit.msg,
+                'message': msg,
                 'modified_files': modified_files,
             })
-            dates_by_dev[email].append(commit.author_date)
-            if commit.msg:
-                msgs_by_dev[email].append(commit.msg)
+            dates_by_dev[email].append(date)
+            if msg:
+                msgs_by_dev[email].append(msg)
 
         # Step 2: compute metrics
         rows = compute_skill_metrics(commits_data)
@@ -227,10 +324,13 @@ def _run_analysis(repo_url):
             row['top_keywords'] = [w for w, _ in Counter(words).most_common(8)]
 
         # Step 3: clustering (uses all features)
+        k_used = min(4, len(rows))
         rows = _run_clustering(rows)
+        cluster_validation = _cluster_validation(rows, k_used)
 
         # Step 4: resolve Generalists using clustering
         rows, cluster_dominant = _resolve_generalists(rows)
+        cluster_profiles = _cluster_profiles(rows)
 
         # Step 5a: PCA with all features
         rows = _compute_pca_2d(rows, FEATURE_COLS, key_x='pca_x', key_y='pca_y')
@@ -249,6 +349,8 @@ def _run_analysis(repo_url):
             'role_distribution': role_distribution,
             'total_analyzed': len(rows),
             'cluster_dominant': cluster_dominant,
+            'cluster_validation': cluster_validation,
+            'cluster_profiles': cluster_profiles,
         }
         _status[repo_url] = 'done'
 

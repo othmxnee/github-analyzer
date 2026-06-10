@@ -3,11 +3,12 @@ from services.analyzer import (
     get_analysis_result,
     get_architecture,
     get_busfactor_simulation,
+    get_developer_emails,
     get_project_summary_data,
-    get_treemap_data,
     get_voronoi_data,
     start_analysis,
 )
+from services.avatar_service import start_avatar_job, get_avatar_result
 from services.skill_service import analyze_skills, get_skills_result
 from services.timeline_service import compute_metric, list_metrics
 
@@ -101,17 +102,6 @@ def project_summary():
         return jsonify({'error': str(e)}), 500
 
 
-@analyze_bp.route('/treemap', methods=['GET'])
-def treemap():
-    try:
-        repo_url = request.args.get('repo_url')
-        if repo_url and not _validate_github_url(repo_url):
-            return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
-        return jsonify(get_treemap_data(repo_url))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 @analyze_bp.route('/voronoi', methods=['GET'])
 def voronoi():
     try:
@@ -134,6 +124,43 @@ def skills():
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         result = analyze_skills(repo_url)
         return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/analyze/avatars', methods=['POST'])
+def avatars():
+    """Kick off the background job that resolves real GitHub profile photos.
+
+    Called by the dashboard after analysis. Resolves every developer's avatar
+    without blocking; the frontend polls /analyze/avatars/result for the
+    growing map. Needs the repo to be analyzed (we read its developer emails).
+    """
+    try:
+        data = request.get_json() or {}
+        repo_url = data.get('repo_url')
+        if not repo_url or not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid repository URL.'}), 400
+        force = bool(data.get('force'))
+        provider = _provider_for_url(repo_url)
+        token = session.get(f'{provider}_token') if provider else None
+        emails = get_developer_emails(repo_url)
+        if not emails:
+            # Repo not analyzed yet — nothing to resolve.
+            return jsonify({'status': 'not_started', 'avatars': {}})
+        start_avatar_job(repo_url, emails, token=token, force=force)
+        return jsonify(get_avatar_result(repo_url))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@analyze_bp.route('/analyze/avatars/result', methods=['GET'])
+def avatars_result():
+    try:
+        repo_url = request.args.get('repo_url')
+        if not repo_url or not _validate_github_url(repo_url):
+            return jsonify({'error': 'Invalid repository URL.'}), 400
+        return jsonify(get_avatar_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -15,14 +15,16 @@ function TopDevelopersChart({ data }) {
     return <p style={{ color: 'var(--t2)' }}>No data available</p>
   }
 
+  const rows = data.slice(0, 10)
+
   const chartData = {
-    labels: data.map(d =>
+    labels: rows.map(d =>
       d.developer.substring(0, 20) + (d.developer.length > 20 ? '…' : '')
     ),
     datasets: [
       {
         label: 'Commits',
-        data: data.map(d => d.commits),
+        data: rows.map(d => d.commits),
         backgroundColor: 'rgba(59,110,234,0.5)',
         borderColor: '#3B6EEA',
         borderWidth: 1,
@@ -31,7 +33,7 @@ function TopDevelopersChart({ data }) {
     ]
   }
 
-  const maxVal = Math.max(...data.map(d => d.commits))
+  const maxVal = Math.max(...rows.map(d => d.commits))
 
   const options = {
     responsive: true,

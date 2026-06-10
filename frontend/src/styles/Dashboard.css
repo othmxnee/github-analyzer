@@ -538,6 +538,11 @@ body.lm .dash-topbar { background: rgba(239,241,247,0.94); }
   fill: var(--t2) !important;
 }
 
+/* Voronoi hotspot map: cells are identical in light & dark mode, so its labels
+   must NOT follow the theme — file name + mods stay black, KCI stays white. */
+.dash-main .card svg text.voronoi-cell-label { fill: #000000 !important; }
+.dash-main .card svg text.voronoi-kci-label  { fill: #ffffff !important; }
+
 /* Recharts specific */
 .dash-main .recharts-text,
 .dash-main .recharts-cartesian-axis-tick-value,

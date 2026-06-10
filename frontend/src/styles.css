@@ -57,23 +57,88 @@
   --color-accent:               var(--ac);
   --color-danger:               var(--red);
 
+  /* Role palette (developer-role charts) */
+  --role-frontend:   #3B6EEA;
+  --role-backend:    #00C896;
+  --role-devops:     #F59E0B;
+  --role-fullstack:  #A78BFA;
+  --role-tester:     #EF4444;
+  --role-mobile:     #06B6D4;
+  --role-generalist: #7880A0;
+
   /* Typography */
   --f:    'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
   --mono: 'JetBrains Mono', 'Fira Code', monospace;
 
+  /* Font sizes */
+  --fs-h1:    clamp(44px, 6vw, 72px);
+  --fs-h2:    clamp(28px, 3.5vw, 44px);
+  --fs-h3:    clamp(26px, 3vw, 38px);
+  --fs-h4:    20px;
+  --fs-h5:    15px;
+  --fs-body:  14px;
+  --fs-sm:    13px;
+  --fs-xs:    12px;
+  --fs-xxs:   11px;
+  --fs-micro: 10px;
+  --fs-eyebrow: 10px;
+  --fs-num-xl: 30px;
+  --fs-num-lg: 26px;
+  --fs-num-md: 22px;
+  --fs-num-sm: 18px;
+
+  /* Letter spacing */
+  --tr-tight:   -.035em;
+  --tr-display: -.025em;
+  --tr-section: -.02em;
+  --tr-eyebrow: .14em;
+  --tr-label:   .1em;
+
   /* Radii */
-  --r:  8px;
-  --rl: 12px;
+  --r:     8px;
+  --rl:    12px;
+  --rxl:   16px;
+  --rpill: 999px;
+
+  /* Spacing scale (4-px grid) */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  14px;
+  --sp-5:  16px;
+  --sp-6:  20px;
+  --sp-7:  24px;
+  --sp-8:  32px;
+  --sp-10: 44px;
+  --sp-12: 64px;
+  --sp-16: 88px;
 
   /* Layout */
   --topbar-h:  52px;
   --sidebar-w: 224px;
   --gap-card:  14px;
   --gap-section: 32px;
+  --maxw-page: 1060px;
 
   /* Shadows */
-  --shadow-soft:   0 20px 40px rgba(0,0,0,0.4);
-  --shadow-subtle: 0 4px 16px rgba(0,0,0,0.3);
+  --shadow-subtle: 0 4px 16px rgba(0,0,0,0.30);
+  --shadow-soft:   0 20px 40px rgba(0,0,0,0.40);
+  --shadow-island: 0 24px 64px rgba(0,0,0,0.50);
+  --shadow-glow:   0 0 0 3px var(--ac-d);
+
+  /* Motion */
+  --dur-fast:   .15s;
+  --dur-base:   .2s;
+  --dur-mid:    .3s;
+  --dur-slow:   .5s;
+  --dur-reveal: .65s;
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Blur */
+  --blur-bar:    blur(18px);
+  --blur-island: blur(12px);
 }
 
 /* ── Light mode ── */
@@ -101,6 +166,11 @@ body.lm {
 
   --risk-danger-text:   #DC2626;
   --risk-warning-text:  #D97706;
+
+  --shadow-subtle: 0 4px 16px rgba(20,30,80,0.06);
+  --shadow-soft:   0 20px 40px rgba(20,30,80,0.10);
+  --shadow-island: 0 24px 64px rgba(20,30,80,0.16);
+
   --color-background-primary:   var(--bg);
   --color-background-secondary: var(--bg2);
   --color-text-primary:         var(--t);
@@ -678,6 +748,35 @@ body.lm .dash-topbar { background: rgba(239,241,247,0.92); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Section content re-mounts on tab switch — fade-up + cascade children */
+.dash-section-anim {
+  animation: dashSectionIn .45s var(--ease-out, ease) both;
+}
+@keyframes dashSectionIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dash-section-anim .card,
+.dash-section-anim .stat-card {
+  animation: fadeUp .55s var(--ease-out, ease) both;
+}
+.dash-section-anim .card:nth-child(1),  .dash-section-anim .stat-card:nth-child(1)  { animation-delay: .03s; }
+.dash-section-anim .card:nth-child(2),  .dash-section-anim .stat-card:nth-child(2)  { animation-delay: .08s; }
+.dash-section-anim .card:nth-child(3),  .dash-section-anim .stat-card:nth-child(3)  { animation-delay: .13s; }
+.dash-section-anim .card:nth-child(4),  .dash-section-anim .stat-card:nth-child(4)  { animation-delay: .18s; }
+.dash-section-anim .card:nth-child(5),  .dash-section-anim .stat-card:nth-child(5)  { animation-delay: .23s; }
+.dash-section-anim .card:nth-child(6),  .dash-section-anim .stat-card:nth-child(6)  { animation-delay: .28s; }
+.dash-section-anim .card:nth-child(7),  .dash-section-anim .stat-card:nth-child(7)  { animation-delay: .33s; }
+
+/* Card hover lift across the dashboard */
+.card {
+  transition: border-color .2s, transform .25s var(--ease-out, ease), box-shadow .25s var(--ease-out, ease);
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+}
+
 /* ════════════════════════════════════════
    RESPONSIVE
 ════════════════════════════════════════ */
@@ -694,4 +793,30 @@ body.lm .dash-topbar { background: rgba(239,241,247,0.92); }
 /* Force text color on all chart children */
 .dash-main :is(h1,h2,h3,h4,h5,h6,p,span,div,li,th,td,label) {
   color: var(--t);
+}
+
+/* ════════════════════════════════════════
+   READY-MADE TEXT UTILITIES (Terminal Noir)
+════════════════════════════════════════ */
+.ga-h1 { font-family: var(--f); font-size: var(--fs-h1); font-weight: 700; letter-spacing: var(--tr-tight);   line-height: 1.04; color: var(--t); }
+.ga-h2 { font-family: var(--f); font-size: var(--fs-h2); font-weight: 700; letter-spacing: var(--tr-display); line-height: 1.10; color: var(--t); }
+.ga-h3 { font-family: var(--f); font-size: var(--fs-h3); font-weight: 700; letter-spacing: var(--tr-display); line-height: 1.12; color: var(--t); }
+.ga-h4 { font-family: var(--f); font-size: var(--fs-h4); font-weight: 700; letter-spacing: var(--tr-section); line-height: 1.20; color: var(--t); }
+.ga-h5 { font-family: var(--f); font-size: var(--fs-h5); font-weight: 600; color: var(--t); }
+.ga-p   { font-family: var(--f); font-size: var(--fs-body); line-height: 1.65; color: var(--t2); }
+.ga-sub { font-family: var(--f); font-size: var(--fs-sm);   line-height: 1.75; color: var(--t2); }
+.ga-eyebrow {
+  font-family: var(--f); font-size: var(--fs-eyebrow); font-weight: 700;
+  text-transform: uppercase; letter-spacing: var(--tr-eyebrow); color: var(--ac);
+}
+.ga-label {
+  font-family: var(--f); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: var(--tr-label); color: var(--t3);
+}
+.ga-mono { font-family: var(--mono); font-size: var(--fs-sm); color: var(--t); }
+.ga-num  { font-family: var(--mono); font-size: var(--fs-num-xl); font-weight: 700; letter-spacing: var(--tr-section); color: var(--ac); }
+.ga-code {
+  font-family: var(--mono); font-size: var(--fs-xs);
+  color: var(--ac); background: var(--ac-d); border: 1px solid var(--ac-b);
+  padding: 2px 6px; border-radius: 4px;
 }

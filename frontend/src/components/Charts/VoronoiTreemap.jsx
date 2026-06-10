@@ -139,7 +139,8 @@ export default function VoronoiTreemap({ data }) {
       // ── label ──────────────────────────────────────────────────────────
       const hasKci    = typeof pt.kci === 'number' && pt.kci >= 0
       const showDot   = hasKci && area >= MIN_AREA_DOT
-      const textColor = pt.t < 0.35 ? '#1e293b' : '#f8fafc'
+      // File name + mods: plain black, same in both modes.
+      const textColor = '#000000'
       const fontSize  = area > 6000 ? 12 : 10
 
       if (area >= MIN_AREA_LBL) {
@@ -148,19 +149,21 @@ export default function VoronoiTreemap({ data }) {
         const subY   = labelY + fontSize + 2
 
         g.append('text')
+          .attr('class', 'voronoi-cell-label')
           .attr('x', cx).attr('y', labelY)
           .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
           .attr('fill', textColor).attr('font-size', fontSize)
-          .attr('font-family', 'Inter, system-ui, sans-serif').attr('font-weight', '500')
+          .attr('font-family', 'Inter, system-ui, sans-serif').attr('font-weight', '600')
           .attr('pointer-events', 'none')
           .text(pt.label)
 
         if (area > 5000) {
           g.append('text')
+            .attr('class', 'voronoi-cell-label')
             .attr('x', cx).attr('y', subY)
             .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
-            .attr('fill', textColor).attr('font-size', 9).attr('opacity', 0.75)
-            .attr('font-family', 'Inter, system-ui, sans-serif')
+            .attr('fill', textColor).attr('font-size', 9)
+            .attr('font-family', 'Inter, system-ui, sans-serif').attr('font-weight', '500')
             .attr('pointer-events', 'none')
             .text(`${pt.value} mods`)
         }
@@ -169,7 +172,7 @@ export default function VoronoiTreemap({ data }) {
       // ── KCI dot — only when kci >= 0 AND cell is large enough ──────────
       if (!showDot) return
 
-      const { bg, text: dotTextColor } = kciDotColor(pt.kci)
+      const { bg } = kciDotColor(pt.kci)
 
       // Place dot at centroid top — above the label if label is shown, else centered
       const dotX = cx
@@ -181,10 +184,12 @@ export default function VoronoiTreemap({ data }) {
         .attr('stroke', 'rgba(255,255,255,0.7)').attr('stroke-width', 1.5)
         .attr('pointer-events', 'none')
 
+      // KCI value inside the dot — always white in both modes
       g.append('text')
+        .attr('class', 'voronoi-kci-label')
         .attr('x', dotX).attr('y', dotY)
         .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
-        .attr('fill', dotTextColor).attr('font-size', 8).attr('font-weight', '600')
+        .attr('fill', '#ffffff').attr('font-size', 8).attr('font-weight', '700')
         .attr('font-family', 'Inter, system-ui, sans-serif')
         .attr('pointer-events', 'none')
         .text(pt.kci.toFixed(2))

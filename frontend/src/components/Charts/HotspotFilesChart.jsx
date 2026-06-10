@@ -15,12 +15,14 @@ function HotspotFilesChart({ data }) {
     return <p style={{ color: '#9ca3af' }}>No hotspot data available</p>
   }
 
+  const rows = data.slice(0, 10)
+
   const chartData = {
-    labels: data.map(d => d.file.length > 30 ? d.file.substring(0, 30) + '...' : d.file),
+    labels: rows.map(d => d.file.length > 30 ? d.file.substring(0, 30) + '...' : d.file),
     datasets: [
       {
         label: 'Modifications',
-        data: data.map(d => d.modifications),
+        data: rows.map(d => d.modifications),
         backgroundColor: 'rgba(239, 68, 68, 0.8)',
         borderColor: '#ef4444',
         borderWidth: 1

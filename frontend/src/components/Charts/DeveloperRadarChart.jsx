@@ -39,9 +39,10 @@ export default function DeveloperRadarChart({ developers }) {
     return <p style={{ color: 'var(--color-text-muted)' }}>No developer data available.</p>
   }
 
+  // All developers, most active first — the picker lets you reach every one
+  // (a radar can only show one developer at a time, so there's no top-N cap).
   const top = [...developers]
     .sort((a, b) => b.total_commits - a.total_commits)
-    .slice(0, 30)
 
   const activeDev = selected
     ? developers.find(d => d.developer === selected)

@@ -13,17 +13,10 @@ const ROLE_COLORS = {
 const VIEWS = [
   {
     key: 'pca',
-    label: 'PCA (original)',
+    label: 'PCA',
     xKey: 'pca_x',
     yKey: 'pca_y',
-    description: 'PCA with all 11 features. Fast but noisy — pct_docs and pct_build add noise.',
-  },
-  {
-    key: 'pca_no_noise',
-    label: 'PCA (no noise)',
-    xKey: 'pca_no_noise_x',
-    yKey: 'pca_no_noise_y',
-    description: 'PCA with 9 features — pct_docs and pct_build removed. Slightly cleaner separation.',
+    description: 'Linear projection of the 12-feature space onto its two directions of maximum variance. Fast.',
   },
   {
     key: 'umap',
