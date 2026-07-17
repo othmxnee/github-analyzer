@@ -2,12 +2,14 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
+from extensions import limiter
 from routes.analyze import analyze_bp
 from routes.auth import auth_bp
 
@@ -28,6 +30,14 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None' if IS_PRODUCTION else 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = IS_PRODUCTION
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
+if IS_PRODUCTION:
+    # Render terminates TLS at its proxy and forwards the real client IP in
+    # X-Forwarded-For. Without this the rate limiter keys every request off the
+    # proxy's single IP — i.e. one shared global limit — instead of per client.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+limiter.init_app(app)
+
 # Comma-separated in production (e.g. "https://app.example.com"); defaults to the
 # Vite dev server. Credentialed CORS forbids "*", so this must stay an explicit list.
 _origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000')
@@ -35,6 +45,13 @@ CORS(app, origins=[o.strip() for o in _origins.split(',') if o.strip()], support
 
 app.register_blueprint(analyze_bp)
 app.register_blueprint(auth_bp)
+
+
+@app.errorhandler(429)
+def ratelimit_exceeded(e):
+    # Flask-Limiter returns HTML by default; the frontend expects JSON with an
+    # `error` field (see handleError in services/api.js).
+    return jsonify({'error': 'Too many analyses from your network. Please wait a while and try again.'}), 429
 
 
 @app.route('/health', methods=['GET'])

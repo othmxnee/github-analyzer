@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, session
+from extensions import limiter
 from services.analyzer import (
     get_analysis_result,
     get_architecture,
@@ -42,6 +43,7 @@ def _validate_github_url(repo_url):
 
 
 @analyze_bp.route('/analyze', methods=['POST'])
+@limiter.limit('10 per hour')
 def analyze():
     try:
         data = request.get_json()
@@ -114,6 +116,9 @@ def voronoi():
 
 
 @analyze_bp.route('/analyze/skills', methods=['POST'])
+# Higher than /analyze: idempotent, reuses the main clone, and the frontend
+# re-fires it on tab switches and re-visits.
+@limiter.limit('40 per hour')
 def skills():
     try:
         data = request.get_json()
@@ -129,6 +134,7 @@ def skills():
 
 
 @analyze_bp.route('/analyze/avatars', methods=['POST'])
+@limiter.limit('40 per hour')
 def avatars():
     """Kick off the background job that resolves real GitHub profile photos.
 

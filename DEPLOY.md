@@ -87,8 +87,18 @@ These are real behaviours, not warnings to ignore:
   are deleted after each analysis. The in-memory result cache is wiped on every
   sleep/restart — expected, since the app was always process-lifetime only.
 
-## Still open (not blocking, worth knowing)
+## Rate limiting
 
-`/analyze` is unauthenticated and each call clones a repo and burns CPU for
-minutes. Fine for a personal/demo site; if it gets abused, add a per-IP rate
-limit (`flask-limiter` is the small change). Say the word and I'll wire it in.
+Per-IP limits (flask-limiter) guard the expensive endpoints:
+
+- `POST /analyze` — **10/hour** (each call clones a repo).
+- `POST /analyze/skills`, `POST /analyze/avatars` — **40/hour** (idempotent,
+  reuse the main clone, re-fired by the frontend on tab switches).
+- Poll endpoints (`/analyze/result`, etc.) are **not** limited — the frontend
+  polls them every 5 s.
+
+Over-limit returns `429` with a JSON `error` the UI already renders. `ProxyFix`
+makes limits key off the real client IP from Render's `X-Forwarded-For`, so each
+visitor is limited independently. Storage is in-memory (`memory://`), so limits
+reset whenever the free service sleeps — fine for a single-worker deploy. To
+tune, edit the `@limiter.limit(...)` decorators in `backend/routes/analyze.py`.
