@@ -705,12 +705,6 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
         for node in subgraph.nodes()
     }
 
-    if subgraph.number_of_edges() > 0:
-        pagerank = nx.pagerank(subgraph)
-    else:
-        uniform = 1.0 / subgraph.number_of_nodes()
-        pagerank = {node: uniform for node in subgraph.nodes()}
-
     ordered_nodes = sorted(
         subgraph.nodes(),
         key=lambda node: (total_degree.get(node, 0), in_degree.get(node, 0)),
@@ -721,7 +715,6 @@ def build_dependency_graph(repo_root, max_nodes=200, max_lines=1500):
         {
             "id": node,
             "degree": int(in_degree.get(node, 0)),
-            "pagerank": float(pagerank.get(node, 0.0)),
         }
         for node in ordered_nodes
     ]
@@ -985,7 +978,7 @@ def build_overview_data(df_commits, df_files, ownership_results, line_counts,
 
     verdict = f"A {age_label} {primary_lang} project with {activity_label} activity{concern}."
 
-    # ── 4 health dimensions (no duplicates with stat cards) ─────────────
+    # ── 4 health dimensions (scored 0–100 versions of the key metrics) ──
     activity_score = 100
     if last_commit_days_ago > 30:  activity_score -= 15
     if last_commit_days_ago > 90:  activity_score -= 30
@@ -993,12 +986,8 @@ def build_overview_data(df_commits, df_files, ownership_results, line_counts,
     if trend == "down": activity_score -= 10
     activity_score = max(0, min(100, activity_score))
 
-    team_score = 0
-    if total_devs > 0:
-        active_ratio = active_devs_90d / total_devs
-        team_score = min(100, int(40 * active_ratio + 12 * min(active_devs_90d, 5)))
-
     dims = project_summary.get("dimensions", {}) or {}
+    bus_factor_score = int(dims.get("Bus Factor", 50))
     knowledge_score = int(dims.get("KCI × In-Degree", 50))
     distribution_score = int(dims.get("Gini Coefficient", 50))
 
@@ -1024,7 +1013,7 @@ def build_overview_data(df_commits, df_files, ownership_results, line_counts,
         "named_findings": findings[:3],
         "health_dimensions": {
             "Activity":     activity_score,
-            "Team":         team_score,
+            "Continuity":   bus_factor_score,
             "Knowledge":    knowledge_score,
             "Distribution": distribution_score,
         },

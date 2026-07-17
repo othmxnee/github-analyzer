@@ -5,7 +5,6 @@ from utils.identity import build_identity_map, canonicalize_email
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score
 import numpy as np
 import threading
 
@@ -59,38 +58,6 @@ def _run_clustering(rows, n_clusters=4):
     for i, row in enumerate(rows):
         row['cluster'] = int(labels[i])
     return rows
-
-
-def _cluster_validation(rows, k_used, k_min=2, k_max=6):
-    """Silhouette analysis to justify the number of clusters.
-
-    Returns the silhouette score for every candidate k and the k that scores
-    best, so the choice of k=4 can be defended (or revisited) rather than left
-    as an unexplained constant. The actual clustering still uses ``k_used``;
-    this is reporting only, so role assignments don't shift under our feet.
-    """
-    n = len(rows)
-    if n < 3:
-        return {"scores": [], "best_k": k_used, "k_used": k_used,
-                "note": "Too few developers for silhouette analysis."}
-
-    X = np.array([[r.get(f, 0) for f in FEATURE_COLS] for r in rows])
-    X_scaled = MinMaxScaler().fit_transform(X)
-
-    scores = []
-    upper = min(k_max, n - 1)
-    for k in range(k_min, upper + 1):
-        try:
-            labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X_scaled)
-            if len(set(labels)) < 2:
-                continue
-            score = float(silhouette_score(X_scaled, labels))
-            scores.append({"k": k, "silhouette": round(score, 3)})
-        except Exception:
-            continue
-
-    best_k = max(scores, key=lambda s: s["silhouette"])["k"] if scores else k_used
-    return {"scores": scores, "best_k": best_k, "k_used": k_used}
 
 
 def _cluster_profiles(rows):
@@ -324,9 +291,7 @@ def _run_analysis(repo_url):
             row['top_keywords'] = [w for w, _ in Counter(words).most_common(8)]
 
         # Step 3: clustering (uses all features)
-        k_used = min(4, len(rows))
         rows = _run_clustering(rows)
-        cluster_validation = _cluster_validation(rows, k_used)
 
         # Step 4: resolve Generalists using clustering
         rows, cluster_dominant = _resolve_generalists(rows)
@@ -349,7 +314,6 @@ def _run_analysis(repo_url):
             'role_distribution': role_distribution,
             'total_analyzed': len(rows),
             'cluster_dominant': cluster_dominant,
-            'cluster_validation': cluster_validation,
             'cluster_profiles': cluster_profiles,
         }
         _status[repo_url] = 'done'

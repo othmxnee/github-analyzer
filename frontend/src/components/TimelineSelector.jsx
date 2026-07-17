@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import '../styles/Timeline.css'
 
 /* ─────────────────────────────────────────
@@ -34,6 +35,11 @@ function presetRange(preset) {
       return { start: isoDay(lastMonthStart), end: isoDay(lastMonthEnd) }
     }
     case 'this_year':   return { start: isoDay(startOfYear),  end: isoDay(tomorrow) }
+    case 'last_year': {
+      const lastYearStart = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1))
+      const thisYearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+      return { start: isoDay(lastYearStart), end: isoDay(thisYearStart) }
+    }
     case 'all':         return { start: null, end: null }
     default:            return { start: null, end: null }
   }
@@ -46,6 +52,7 @@ const PRESETS = [
   { id: 'this_month', label: 'This month' },
   { id: 'last_month', label: 'Last month' },
   { id: 'this_year',  label: 'This year' },
+  { id: 'last_year',  label: 'Last year' },
   { id: 'all',        label: 'All time' },
 ]
 
@@ -87,43 +94,56 @@ export function compareModeLabel(id) {
 ───────────────────────────────────────── */
 export default function TimelineSelector({ value, onChange, allowCompare = true }) {
   const [open, setOpen] = useState(false)
-  const [modeOpen, setModeOpen] = useState(false)
   const [customStart, setCustomStart] = useState(value.start || '')
   const [customEnd,   setCustomEnd]   = useState(value.end || '')
-  const popRef = useRef(null)
-  const modeRef = useRef(null)
+  const [pos, setPos] = useState(null)
+  const popRef = useRef(null)      // wraps the trigger button (anchor)
+  const popoverRef = useRef(null)  // the portaled dropdown itself
 
+  // Outside-click: close unless the click is on the trigger or inside the portaled popover.
   useEffect(() => {
     if (!open) return
     const onClick = (e) => {
-      if (popRef.current && !popRef.current.contains(e.target)) setOpen(false)
+      if (popRef.current && popRef.current.contains(e.target)) return
+      if (popoverRef.current && popoverRef.current.contains(e.target)) return
+      setOpen(false)
     }
     window.addEventListener('mousedown', onClick)
     return () => window.removeEventListener('mousedown', onClick)
   }, [open])
 
-  useEffect(() => {
-    if (!modeOpen) return
-    const onClick = (e) => {
-      if (modeRef.current && !modeRef.current.contains(e.target)) setModeOpen(false)
+  // The dropdown is portaled to <body> so the card's overflow:hidden can't clip it.
+  // Track the trigger's position so the portal stays anchored on scroll/resize.
+  useLayoutEffect(() => {
+    if (!open) return
+    const update = () => {
+      const r = popRef.current?.getBoundingClientRect()
+      if (r) setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
     }
-    window.addEventListener('mousedown', onClick)
-    return () => window.removeEventListener('mousedown', onClick)
-  }, [modeOpen])
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [open])
 
   const choosePreset = (id) => {
     if (id === 'custom') {
       // Open custom popover; keep dropdown showing the inputs.
       // Comparison turns on automatically for any finite window.
-      onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: true })
+      onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: allowCompare })
       return
     }
-    onChange({ ...value, preset: id, start: null, end: null, compare: false })
+    // Picking any finite window auto-compares it against the previous period
+    // (e.g. "This year" vs last year). No compare button needed; "All time" can't compare.
+    onChange({ ...value, preset: id, start: null, end: null, compare: allowCompare && id !== 'all' })
     setOpen(false)
   }
 
   const applyCustom = () => {
-    onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: false })
+    onChange({ ...value, preset: 'custom', start: customStart || null, end: customEnd || null, compare: allowCompare })
     setOpen(false)
   }
 
@@ -148,8 +168,12 @@ export default function TimelineSelector({ value, onChange, allowCompare = true 
         </svg>
       </button>
 
-      {open && (
-        <div className="tl-pop">
+      {open && pos && createPortal(
+        <div
+          ref={popoverRef}
+          className="tl-pop"
+          style={{ position: 'fixed', top: pos.top, right: pos.right }}
+        >
           <div className="tl-pop-head">Time window</div>
           {PRESETS.map(p => (
             <button
@@ -189,7 +213,8 @@ export default function TimelineSelector({ value, onChange, allowCompare = true 
               Apply custom range
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -55,7 +55,7 @@ function TopDevModsChart({ data }) {
   }
 
   return (
-    <div style={{ height: '450px' }}>
+    <div style={{ height: '300px' }}>
       <Bar data={chartData} options={options} />
     </div>
   )

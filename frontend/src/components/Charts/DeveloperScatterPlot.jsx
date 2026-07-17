@@ -10,6 +10,17 @@ const ROLE_COLORS = {
   Generalist: '#937860',
 }
 
+// All 7 file-category percentages — shown in the tooltip (non-zero ones).
+const SKILL_CATEGORIES = [
+  { key: 'pct_frontend', label: 'Frontend' },
+  { key: 'pct_backend',  label: 'Backend' },
+  { key: 'pct_mobile',   label: 'Mobile' },
+  { key: 'pct_test',     label: 'Test' },
+  { key: 'pct_devops',   label: 'DevOps' },
+  { key: 'pct_docs',     label: 'Docs' },
+  { key: 'pct_build',    label: 'Build' },
+]
+
 const VIEWS = [
   {
     key: 'pca',
@@ -27,7 +38,7 @@ const VIEWS = [
   },
 ]
 
-function ScatterPlot({ developers, xKey, yKey }) {
+function ScatterPlot({ developers, xKey, yKey, onSelect }) {
   const [tooltip, setTooltip] = useState(null)
   const [hoveredRole, setHoveredRole] = useState(null)
 
@@ -67,7 +78,7 @@ function ScatterPlot({ developers, xKey, yKey }) {
               width: 12, height: 12, borderRadius: '50%',
               background: ROLE_COLORS[role] || '#aaa'
             }} />
-            <span style={{ fontSize: 12, color: 'var(--color-text)' }}>{role}</span>
+            <span style={{ fontSize: 12, color: 'var(--t)' }}>{role}</span>
           </div>
         ))}
       </div>
@@ -84,12 +95,12 @@ function ScatterPlot({ developers, xKey, yKey }) {
               <line
                 x1={PAD} y1={PAD + t * (HEIGHT - PAD * 2)}
                 x2={WIDTH - PAD} y2={PAD + t * (HEIGHT - PAD * 2)}
-                stroke="var(--color-border)" strokeWidth={0.5} strokeDasharray="4 4"
+                stroke="var(--b)" strokeWidth={0.5} strokeDasharray="4 4"
               />
               <line
                 x1={PAD + t * (WIDTH - PAD * 2)} y1={PAD}
                 x2={PAD + t * (WIDTH - PAD * 2)} y2={HEIGHT - PAD}
-                stroke="var(--color-border)" strokeWidth={0.5} strokeDasharray="4 4"
+                stroke="var(--b)" strokeWidth={0.5} strokeDasharray="4 4"
               />
             </g>
           ))}
@@ -112,6 +123,7 @@ function ScatterPlot({ developers, xKey, yKey }) {
                 style={{ cursor: 'pointer', transition: 'fill-opacity 0.2s' }}
                 onMouseEnter={() => setTooltip({ dev, x, y })}
                 onMouseLeave={() => setTooltip(null)}
+                onClick={() => onSelect && onSelect(dev)}
               />
             )
           })}
@@ -124,31 +136,41 @@ function ScatterPlot({ developers, xKey, yKey }) {
             left: `${(tooltip.x / WIDTH) * 100}%`,
             top: `${(tooltip.y / HEIGHT) * 100}%`,
             transform: 'translate(-50%, -120%)',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
+            background: 'var(--bg2)',
+            border: '1px solid var(--b)',
             borderRadius: 8,
             padding: '8px 12px',
             fontSize: 12,
             pointerEvents: 'none',
             zIndex: 10,
             minWidth: 160,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            boxShadow: '0 6px 20px rgba(0,0,0,0.45)'
           }}>
-            <div style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>
               {tooltip.dev.developer.split('@')[0]}
             </div>
             <div style={{ color: ROLE_COLORS[tooltip.dev.role] || '#aaa', fontWeight: 600 }}>
               {tooltip.dev.role}
-              {tooltip.dev.role_original === 'Generalist' &&
+              {tooltip.dev.role_original === 'Generalist' && tooltip.dev.role !== 'Generalist' &&
                 <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}> (was Generalist)</span>
               }
             </div>
             <div style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>
               {tooltip.dev.total_commits} commits
             </div>
-            <div style={{ color: 'var(--color-text-muted)' }}>
-              Frontend: {(tooltip.dev.pct_frontend * 100).toFixed(0)}% |
-              Backend: {(tooltip.dev.pct_backend * 100).toFixed(0)}%
+            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {SKILL_CATEGORIES
+                .map(c => ({ ...c, pct: (tooltip.dev[c.key] || 0) * 100 }))
+                .filter(c => c.pct >= 0.5)
+                .sort((a, b) => b.pct - a.pct)
+                .map(c => (
+                  <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12,
+                                            color: 'var(--color-text-muted)' }}>
+                    <span>{c.label}</span>
+                    <span style={{ color: 'var(--t)', fontWeight: 600 }}>{c.pct.toFixed(0)}%</span>
+                  </div>
+                ))
+              }
             </div>
           </div>
         )}
@@ -157,7 +179,7 @@ function ScatterPlot({ developers, xKey, yKey }) {
   )
 }
 
-export default function DeveloperScatterPlot({ developers }) {
+export default function DeveloperScatterPlot({ developers, onSelectDeveloper }) {
   const [activeView, setActiveView] = useState('pca')
 
   if (!developers || developers.length === 0) {
@@ -183,15 +205,15 @@ export default function DeveloperScatterPlot({ developers }) {
               style={{
                 padding: '6px 14px',
                 borderRadius: 6,
-                border: '1px solid var(--color-border)',
+                border: '1px solid var(--b)',
                 background: activeView === view.key
                   ? 'var(--color-accent, #4C72B0)'
-                  : 'var(--color-surface)',
+                  : 'var(--surf)',
                 color: activeView === view.key
                   ? '#fff'
                   : isUmapMissing
                     ? 'var(--color-text-muted)'
-                    : 'var(--color-text)',
+                    : 'var(--t)',
                 fontSize: 13,
                 fontWeight: activeView === view.key ? 600 : 400,
                 cursor: isUmapMissing ? 'not-allowed' : 'pointer',
@@ -222,6 +244,7 @@ export default function DeveloperScatterPlot({ developers }) {
         developers={developers}
         xKey={currentView.xKey}
         yKey={currentView.yKey}
+        onSelect={onSelectDeveloper}
       />
 
       {/* Footer note */}

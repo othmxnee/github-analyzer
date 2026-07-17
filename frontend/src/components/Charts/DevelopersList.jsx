@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import DevActivityTimeline from './DevActivityTimeline'
 
 /* Real GitHub photo with an initials-circle fallback (used when there's no
@@ -66,6 +66,7 @@ function initials(email) {
 
 function fmtDays(d) {
   if (!d) return '—'
+  if (d < 1 / 24) return `${Math.max(1, Math.round(d * 1440))}m`  // under 1h → minutes
   if (d < 1)  return `${Math.round(d * 24)}h`
   if (d < 7)  return `${d.toFixed(1)}d`
   if (d < 30) return `${(d / 7).toFixed(1)}w`
@@ -382,40 +383,6 @@ function DevProfile({ dev, skillsReady, repoEndDate }) {
       {/* ── detail sections — masonry columns so cards pack with no gaps ── */}
       <div style={{ columnWidth: 340, columnGap: 14 }}>
 
-      {/* ── role confidence & specialization ── */}
-      {dev.role_confidence !== undefined && (
-        <SectionBox title="Role Confidence & Specialization">
-          <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>
-            Assigned role: <strong style={{ color: bg }}>{dev.role}</strong>
-            {dev.role_confidence < 0.25 && (
-              <span style={{ color: '#F59E0B', marginLeft: 8, fontSize: 11 }}>⚠ borderline</span>
-            )}
-          </div>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: 'var(--t2)' }}>Confidence</span>
-              <span style={{ fontSize: 11, color: 'var(--t)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                {Math.round((dev.role_confidence || 0) * 100)}%
-              </span>
-            </div>
-            <Bar value={dev.role_confidence || 0} color="#3B6EEA" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: 'var(--t2)' }}>Specialization</span>
-              <span style={{ fontSize: 11, color: 'var(--t)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                {Math.round((dev.specialization || 0) * 100)}%
-              </span>
-            </div>
-            <Bar value={dev.specialization || 0} color="#A78BFA" />
-          </div>
-          <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10, fontStyle: 'italic', lineHeight: 1.5 }}>
-            Confidence = how clear-cut the role is (high = one dominant area).
-            Specialization = how narrow the work is (high = a single area; low = broad generalist).
-          </p>
-        </SectionBox>
-      )}
-
       {/* ── risk exposure ── */}
       {bfRank && (
         <SectionBox title="Risk Exposure">
@@ -560,9 +527,19 @@ function DevProfile({ dev, skillsReady, repoEndDate }) {
 /* ════════════════════════════════════════
    MAIN COMPONENT
 ════════════════════════════════════════ */
-export default function DevelopersList({ results, skillsData, skillsLoading }) {
+export default function DevelopersList({ results, skillsData, skillsLoading, initialSelected }) {
   const [search,   setSearch]   = useState('')
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState(initialSelected?.key || null)
+
+  // Select the developer requested from another tab (e.g. the PCA map).
+  // `initialSelected` carries a fresh nonce per request so re-selecting the
+  // same developer still re-fires this effect.
+  useEffect(() => {
+    if (initialSelected?.key) {
+      setSelected(initialSelected.key)
+      setSearch('')
+    }
+  }, [initialSelected])
 
   const developers = useMemo(() => buildDevMap(results, skillsData), [results, skillsData])
 
@@ -576,11 +553,18 @@ export default function DevelopersList({ results, skillsData, skillsLoading }) {
   }, [developers, search])
 
   const activeDev = selected
-    ? (developers.find(d => d.developer === selected) || filtered[0] || null)
+    ? (developers.find(d => d.developer.toLowerCase() === selected.toLowerCase()) || filtered[0] || null)
     : (filtered[0] || null)
 
   const skillsReady  = !!skillsData?.developers?.length
   const repoEndDate  = results?.summary?.date_range?.end || null
+
+  // Bring the selected developer into view in the left list (e.g. when jumped
+  // to from the PCA map).
+  const activeRowRef = useRef(null)
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [activeDev?.developer])
 
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0, flex: 1, width: '100%' }}>
@@ -637,7 +621,8 @@ export default function DevelopersList({ results, skillsData, skillsLoading }) {
             const refMs   = repoEndDate ? new Date(repoEndDate).getTime() : Date.now()
             const active  = lastMs && (refMs - lastMs) / (1000 * 60 * 60 * 24 * 30) < 6
             return (
-              <div key={dev.developer} onClick={() => setSelected(dev.developer)}
+              <div key={dev.developer} ref={isActive ? activeRowRef : null}
+                onClick={() => setSelected(dev.developer)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 9,
                   padding: '9px 12px', cursor: 'pointer',

@@ -11,7 +11,7 @@ import { useChartColors } from '../../hooks/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip)
 
-function PageRankTable({ data }) {
+function InDegreeTable({ data }) {
   const { grid, tick, muted } = useChartColors()
 
   if (!data || data.length === 0) {
@@ -80,4 +80,4 @@ function PageRankTable({ data }) {
   )
 }
 
-export default PageRankTable
+export default InDegreeTable

@@ -125,7 +125,7 @@ function LorenzChart({ data, gini }) {
 
   return (
     <div>
-      <div style={{ height: '260px', position: 'relative' }}>
+      <div style={{ height: '300px', position: 'relative' }}>
         <Line data={chartData} options={options} />
       </div>
       {gini !== undefined && (

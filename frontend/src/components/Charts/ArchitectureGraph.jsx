@@ -8,7 +8,7 @@ function degreeColor(degree) {
 }
 
 function nodeValue(node) {
-  return Math.max(3.5, (node.pagerank || 0) * 360)
+  return Math.max(3.5, (node.degree || 0) * 5)
 }
 
 function shortFileName(filePath = '') {
@@ -196,7 +196,7 @@ function ArchitectureGraph({ data }) {
         }}
         nodeLabel={node => {
           const imports = outgoingCounts.get(node.id) || 0
-          return `File: ${node.id}<br/>Dependencies: ${imports}<br/>Imported by: ${node.degree || 0}<br/>PageRank: ${(node.pagerank || 0).toFixed(3)}`
+          return `File: ${node.id}<br/>Dependencies: ${imports}<br/>Imported by: ${node.degree || 0}`
         }}
         onNodeHover={node => setHoverNode(node || null)}
         onEngineStop={() => {

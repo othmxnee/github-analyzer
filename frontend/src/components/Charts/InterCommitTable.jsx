@@ -57,7 +57,7 @@ function InterCommitTable({ data }) {
 
   return (
     <div>
-      <div style={{ height: '450px' }}>
+      <div style={{ height: '300px' }}>
         <Bar data={chartData} options={options} />
       </div>
       <p style={{
@@ -66,7 +66,7 @@ function InterCommitTable({ data }) {
         color: '#6b7280',
         fontStyle: 'italic'
       }}>
-        Lower values indicate more frequent commits. Only shows developers with 50+ commits.
+        Lower values indicate more frequent commits. Only shows developers with 3+ commits.
       </p>
     </div>
   )

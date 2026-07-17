@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import * as d3 from 'd3'
 
 function logNorm(value, minVal, maxVal) {
   if (maxVal <= minVal) return 0.5
@@ -60,7 +60,9 @@ function cellCentroid(cell) {
 export default function VoronoiTreemap({ data }) {
   const svgRef  = useRef(null)
   const wrapRef = useRef(null)
+  const tipRef  = useRef(null)
   const [tooltip, setTooltip] = useState(null)
+  const [tipPos, setTipPos]   = useState(null)
   const [dims, setDims]       = useState({ w: 800, h: 520 })
 
   const nodes = data?.nodes ?? []
@@ -197,8 +199,28 @@ export default function VoronoiTreemap({ data }) {
 
   }, [nodes, edges, dims])
 
+  // Keep the tooltip inside the viewport: flip to the left of the cursor when it
+  // would overflow the right edge, and clamp vertically. Runs pre-paint so the
+  // corrected position is the one the browser actually renders (no flicker).
+  useLayoutEffect(() => {
+    if (!tooltip || !tipRef.current) { setTipPos(null); return }
+    const rect   = tipRef.current.getBoundingClientRect()
+    const margin = 12
+    let left = tooltip.x + 14
+    let top  = tooltip.y - 10
+    if (left + rect.width > window.innerWidth - margin) {
+      left = tooltip.x - rect.width - 14   // flip to the left of the cursor
+    }
+    if (left < margin) left = margin
+    if (top + rect.height > window.innerHeight - margin) {
+      top = window.innerHeight - rect.height - margin
+    }
+    if (top < margin) top = margin
+    setTipPos({ left, top })
+  }, [tooltip])
+
   if (nodes.length === 0) {
-    return <p style={{ color: '#9ca3af', padding: '1rem 0' }}>No Voronoi data available.</p>
+    return <p style={{ color: '#9ca3af', padding: '1rem 0' }}>No hotspot data available.</p>
   }
 
   const minVal = Math.min(...nodes.map(n => n.value))
@@ -252,13 +274,16 @@ export default function VoronoiTreemap({ data }) {
         const hasKci = typeof tooltip.node.kci === 'number' && tooltip.node.kci >= 0
         const { bg, label: kciLabel } = hasKci ? kciDotColor(tooltip.node.kci) : { bg: '', label: '' }
         return (
-          <div style={{
-            position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 10,
+          <div ref={tipRef} style={{
+            position: 'fixed',
+            left: tipPos ? tipPos.left : tooltip.x + 14,
+            top:  tipPos ? tipPos.top  : tooltip.y - 10,
             background: 'var(--color-background-primary)',
             border: '0.5px solid var(--color-border-secondary)',
             borderRadius: 'var(--border-radius-md)',
             padding: '10px 14px', fontSize: 13, zIndex: 9999,
             pointerEvents: 'none', minWidth: 200,
+            visibility: tipPos ? 'visible' : 'hidden',
           }}>
             <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 6, color: 'var(--color-text-primary)' }}>
               {tooltip.node.label}

@@ -4,7 +4,7 @@ import TopDevelopersChart from '../components/Charts/TopDevelopersChart'
 import TimelineChart from '../components/Charts/TimelineChart'
 import LorenzChart from '../components/Charts/LorenzChart'
 import KCITable from '../components/Charts/KCITable'
-import InDegreeTable from '../components/Charts/PageRankTable'
+import InDegreeTable from '../components/Charts/InDegreeTable'
 import RiskTable from '../components/Charts/RiskTable'
 import InterCommitTable from '../components/Charts/InterCommitTable'
 import TopDevModsChart from '../components/Charts/TopDevModsChart'
@@ -24,13 +24,12 @@ import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
 import DeveloperScatterPlot from '../components/Charts/DeveloperScatterPlot'
 import KnowledgeRiskCards from '../components/Charts/KnowledgeRiskCards'
 import OrphanedFilesTable from '../components/Charts/OrphanedFilesTable'
-import LiveRiskTable from '../components/Charts/LiveRiskTable'
 import CollaborationNetwork from '../components/Charts/CollaborationNetwork'
-import CoChangeTable from '../components/Charts/CoChangeTable'
 import BusFactorTrendChart from '../components/Charts/BusFactorTrendChart'
 import TimelineCard from '../components/TimelineCard'
 import ComparisonList from '../components/ComparisonList'
 import MetricDetailModal, { SeeAllButton } from '../components/MetricDetailModal'
+import { API_URL } from '../services/api'
 import '../styles/Dashboard.css'
 import '../styles/Timeline.css'
 
@@ -240,25 +239,12 @@ const DETAIL_COLS = {
     { key: 'file', label: 'File', mono: true },
     { key: 'risk_score', label: 'Risk score', numeric: true, align: 'right', width: '140px', render: fixed(4) },
   ],
-  live_risk: [
-    { key: 'file', label: 'File', mono: true, width: '1.7fr' },
-    { key: 'risk_score', label: 'Risk', numeric: true, align: 'right', render: fixed(4) },
-    { key: 'kci', label: 'KCI', numeric: true, align: 'right', render: pctR },
-    { key: 'in_degree', label: 'In-deg', numeric: true, align: 'right' },
-    { key: 'months_idle', label: 'Idle (mo)', numeric: true, align: 'right', render: round0 },
-  ],
   orphaned: [
     { key: 'file', label: 'File', mono: true, width: '1.7fr' },
     { key: 'owner', label: 'Last author', render: devName },
     { key: 'ownership', label: 'Owns', numeric: true, align: 'right', render: pctR },
     { key: 'lines', label: 'Lines', numeric: true, align: 'right' },
     { key: 'months_inactive', label: 'Inactive (mo)', numeric: true, align: 'right', render: round0 },
-  ],
-  cochange: [
-    { key: 'file_a', label: 'File A', mono: true },
-    { key: 'file_b', label: 'File B', mono: true },
-    { key: 'co_changes', label: 'Together', numeric: true, align: 'right', width: '110px', render: (v) => `${v}×` },
-    { key: 'confidence', label: 'Always together', numeric: true, align: 'right', width: '160px', render: pctR },
   ],
   ownership: [
     { key: 'file', label: 'File', mono: true },
@@ -329,6 +315,7 @@ export default function Dashboard() {
   const [skillsError, setSkillsError]     = useState(null)
   const [avatars, setAvatars]             = useState({})
   const [activeSection, setActiveSection] = useState('overview')
+  const [devSelection, setDevSelection]   = useState(null)
   const [isLight, setIsLight]             = useState(false)
   const navigate = useNavigate()
 
@@ -361,7 +348,7 @@ export default function Dashboard() {
     let cancelled = false
 
     const pollOnce = () =>
-      fetch(`http://localhost:5000/analyze/skills/result?repo_url=${encodeURIComponent(repoUrl)}`)
+      fetch(`${API_URL}/analyze/skills/result?repo_url=${encodeURIComponent(repoUrl)}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           if (cancelled) return false
@@ -373,8 +360,9 @@ export default function Dashboard() {
 
     const run = async () => {
       // Kick off backend job — idempotent, returns immediately if already done/running
-      await fetch('http://localhost:5000/analyze/skills', {
+      await fetch(`${API_URL}/analyze/skills`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl }),
       }).catch(() => {})
@@ -405,7 +393,7 @@ export default function Dashboard() {
     let cancelled = false
 
     const pollOnce = () =>
-      fetch(`http://localhost:5000/analyze/avatars/result?repo_url=${encodeURIComponent(repoUrl)}`)
+      fetch(`${API_URL}/analyze/avatars/result?repo_url=${encodeURIComponent(repoUrl)}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           if (cancelled) return false
@@ -416,8 +404,9 @@ export default function Dashboard() {
 
     const run = async () => {
       // Idempotent: starts the job if not already running/done, returns current map.
-      await fetch('http://localhost:5000/analyze/avatars', {
+      await fetch(`${API_URL}/analyze/avatars`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl }),
       }).then(r => r.json())
@@ -453,6 +442,14 @@ export default function Dashboard() {
     document.getElementById('dash-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  /* ── jump from a developer dot/chart to that developer's profile card ── */
+  const goToDeveloper = useCallback((dev) => {
+    const key = (dev?.developer || '').toLowerCase()
+    if (!key) return
+    setDevSelection({ key, nonce: Date.now() })
+    switchSection('developers')
+  }, [switchSection])
+
   /* ── "See all" detail modal ── */
   const [detail, setDetail] = useState(null)
 
@@ -479,11 +476,9 @@ export default function Dashboard() {
     kci = [],
     in_degree = [],
     risk_files = [],
-    live_risk_files = [],
     orphaned_knowledge = {},
     active_bus_factor = {},
     collaboration = { nodes: [], edges: [] },
-    cochange_coupling = [],
     health_trend = [],
     inter_commit = {},
     hotspot_files = [],
@@ -538,20 +533,22 @@ export default function Dashboard() {
         sub="Who contributes, how often, and how consistently"
       />
 
-      {/* Row 1 — Timeline (wider) + Inter-Commit (narrower) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--gap-card)' }}>
-        <TimelineCard
-          title="Activity Timeline"
-          sub="Monthly commit volume"
-          metric="activity"
-          repoUrl={repoUrl}
-          fallback={timeline}
-          aggregateLabel="modifications"
-        >
-          {({ current }) => (
-            <TimelineChart data={asPoints(current, timeline)} />
-          )}
-        </TimelineCard>
+      {/* Row 1 — Activity timeline (full width) */}
+      <TimelineCard
+        title="Activity Timeline"
+        sub="Monthly commit volume"
+        metric="activity"
+        repoUrl={repoUrl}
+        fallback={timeline}
+        aggregateLabel="modifications"
+      >
+        {({ current }) => (
+          <TimelineChart data={asPoints(current, timeline)} />
+        )}
+      </TimelineCard>
+
+      {/* Row 2 — Inter-Commit Time + Lorenz inequality, side by side */}
+      <div className="grid-2">
         <ChartCard
           title="Inter-Commit Time (Days)"
           action={seeAll({
@@ -562,15 +559,11 @@ export default function Dashboard() {
             columns: DETAIL_COLS.inter_commit,
             rows: Object.entries(inter_commit).map(([developer, v]) => ({ developer, median_days: parseFloat(v) })),
             defaultSort: { key: 'median_days', dir: 'asc' },
-            note: 'Developers with 50+ commits.',
+            note: 'Developers with 3+ commits.',
           }, 0)}
         >
           <InterCommitTable data={inter_commit} />
         </ChartCard>
-      </div>
-
-      {/* Row 2 — Lorenz + Top Developers filling the row equally */}
-      <div className="grid-2">
         <TimelineCard
           title="Contribution Inequality (Lorenz Curve)"
           metric="gini_lorenz"
@@ -585,6 +578,25 @@ export default function Dashboard() {
             return <LorenzChart data={l} gini={g} />
           }}
         </TimelineCard>
+      </div>
+
+      {/* Effort-basis check: Gini by file-touches vs by lines added */}
+      <div style={{
+        display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
+        padding: '10px 16px', fontSize: 12, color: 'var(--t3)',
+        background: 'var(--color-surface, rgba(255,255,255,0.03))', borderRadius: 8,
+      }}>
+        <span><strong style={{ color: 'var(--t)' }}>Gini (file touches):</strong> {gini.toFixed(2)}</span>
+        <span><strong style={{ color: 'var(--t)' }}>Gini (lines added):</strong> {gini_effort.toFixed(2)}</span>
+        <span style={{ fontStyle: 'italic' }}>
+          {Math.abs(gini - gini_effort) < 0.1
+            ? 'Both bases agree — the inequality reading is robust.'
+            : 'The two bases differ — weighting by real effort changes the inequality picture.'}
+        </span>
+      </div>
+
+      {/* Row 3 — Top Developers by Commits + by File Modifications, side by side */}
+      <div className="grid-2">
         <TimelineCard
           title="Top Developers by Commits"
           metric="top_developers"
@@ -610,24 +622,34 @@ export default function Dashboard() {
             </>
           )}
         </TimelineCard>
+        <TimelineCard
+          title="Top Developers by File Modifications"
+          metric="top_devs_mods"
+          repoUrl={repoUrl}
+          fallback={top_devs_mods}
+          aggregateLabel="modifications"
+          headerAction={seeAll({
+            title: 'Developers by File Modifications — all',
+            subtitle: 'All-time ranking · bots & merge commits excluded',
+            fileName: 'developers_by_modifications',
+            searchPlaceholder: 'Search developer…',
+            columns: DETAIL_COLS.top_devs_mods,
+            rows: top_devs_mods,
+            defaultSort: { key: 'modifications', dir: 'desc' },
+          })}
+        >
+          {({ current, delta }) => (
+            <>
+              <TopDevModsChart data={asItems(current, top_devs_mods)} />
+              {delta?.per_item && (
+                <ComparisonList items={delta.per_item} valueLabel="mods" />
+              )}
+            </>
+          )}
+        </TimelineCard>
       </div>
 
-      {/* Effort-basis check: Gini by file-touches vs by lines added */}
-      <div style={{
-        display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
-        padding: '10px 16px', fontSize: 12, color: 'var(--t3)',
-        background: 'var(--color-surface, rgba(255,255,255,0.03))', borderRadius: 8,
-      }}>
-        <span><strong style={{ color: 'var(--t)' }}>Gini (file touches):</strong> {gini.toFixed(2)}</span>
-        <span><strong style={{ color: 'var(--t)' }}>Gini (lines added):</strong> {gini_effort.toFixed(2)}</span>
-        <span style={{ fontStyle: 'italic' }}>
-          {Math.abs(gini - gini_effort) < 0.1
-            ? 'Both bases agree — the inequality reading is robust.'
-            : 'The two bases differ — weighting by real effort changes the inequality picture.'}
-        </span>
-      </div>
-
-      {/* Row 3 — Commit frequency full width */}
+      {/* Row 4 — Commit frequency full width */}
       <TimelineCard
         title="Developer Activity Over Time"
         metric="commit_frequency"
@@ -643,33 +665,6 @@ export default function Dashboard() {
       >
         {({ current }) => (
           <CommitFrequencyChart data={asSeries(current, commit_frequency)} />
-        )}
-      </TimelineCard>
-
-      {/* Row 4 — Dev mods full width */}
-      <TimelineCard
-        title="Top Developers by File Modifications"
-        metric="top_devs_mods"
-        repoUrl={repoUrl}
-        fallback={top_devs_mods}
-        aggregateLabel="modifications"
-        headerAction={seeAll({
-          title: 'Developers by File Modifications — all',
-          subtitle: 'All-time ranking · bots & merge commits excluded',
-          fileName: 'developers_by_modifications',
-          searchPlaceholder: 'Search developer…',
-          columns: DETAIL_COLS.top_devs_mods,
-          rows: top_devs_mods,
-          defaultSort: { key: 'modifications', dir: 'desc' },
-        })}
-      >
-        {({ current, delta }) => (
-          <>
-            <TopDevModsChart data={asItems(current, top_devs_mods)} />
-            {delta?.per_item && (
-              <ComparisonList items={delta.per_item} valueLabel="mods" />
-            )}
-          </>
         )}
       </TimelineCard>
 
@@ -719,7 +714,7 @@ export default function Dashboard() {
       >
         <OrphanedFilesTable data={orphaned_knowledge.orphaned_files} />
       </ChartCard>
-      <div className="grid-3">
+      <div className="grid-2">
         <ChartCard
           title="Knowledge Concentration (KCI)"
           action={seeAll({
@@ -748,6 +743,9 @@ export default function Dashboard() {
         >
           <InDegreeTable data={in_degree} />
         </ChartCard>
+      </div>
+      {/* Risk Analysis + Live Risk, side by side (same KCI × In-Degree basis) */}
+      <div className="grid-2">
         <ChartCard
           title="Risk Analysis (KCI × In-Degree)"
           action={seeAll({
@@ -763,21 +761,6 @@ export default function Dashboard() {
           <RiskTable data={risk_files} />
         </ChartCard>
       </div>
-      <ChartCard
-        title="Live Risk (KCI × In-Degree × Recency)"
-        sub="recency-weighted — like Risk Analysis, but ranks recently-changed files higher"
-        action={seeAll({
-          title: 'Live Risk — all files',
-          subtitle: 'KCI × In-Degree × Recency — recently-changed fragile files rank higher',
-          fileName: 'live_risk_files',
-          searchPlaceholder: 'Search file…',
-          columns: DETAIL_COLS.live_risk,
-          rows: live_risk_files,
-          defaultSort: { key: 'risk_score', dir: 'desc' },
-        })}
-      >
-        <LiveRiskTable data={live_risk_files} />
-      </ChartCard>
       <TimelineCard
         title="Bus Factor Risk Simulation"
         sub="Window-based bus factor uses churn-weighted ownership (approximation)"
@@ -844,7 +827,7 @@ export default function Dashboard() {
         )}
       </TimelineCard>
       <TimelineCard
-        title="Import-Coupled File Hotspots (Voronoi)"
+        title="Code Hotspot Map"
         metric="voronoi"
         repoUrl={repoUrl}
         fallback={voronoi}
@@ -862,29 +845,13 @@ export default function Dashboard() {
       <SectionHead
         eyebrow="Architecture"
         title="Dependency Graph"
-        sub="File coupling and PageRank centrality"
+        sub="File coupling and dependency centrality"
       />
       <ChartCard title="Architecture Graph">
         <ArchitectureGraph data={architecture} />
       </ChartCard>
       <ChartCard title="Developer Collaboration Network" sub="who works on the same files">
         <CollaborationNetwork data={collaboration} />
-      </ChartCard>
-      <ChartCard
-        title="Hidden Coupling — Files That Change Together"
-        sub="not linked by imports"
-        action={seeAll({
-          title: 'Hidden Coupling — all pairs',
-          subtitle: 'Files that change together but are not linked by an import',
-          fileName: 'hidden_coupling',
-          searchPlaceholder: 'Search file…',
-          searchKeys: ['file_a', 'file_b'],
-          columns: DETAIL_COLS.cochange,
-          rows: cochange_coupling,
-          defaultSort: { key: 'confidence', dir: 'desc' },
-        }, 15)}
-      >
-        <CoChangeTable data={cochange_coupling} />
       </ChartCard>
     </div>
   )
@@ -894,7 +861,7 @@ export default function Dashboard() {
       <SectionHead
         eyebrow="Developer Roles"
         title="Skills & Role Detection"
-        sub="15 metrics per developer · K-Means clustering · PCA projection"
+        sub="12 metrics per developer · K-Means clustering · PCA projection"
       />
       {skillsLoading && (
         <div className="dash-loading-card">
@@ -913,7 +880,7 @@ export default function Dashboard() {
             <StatCard
               label="Developers Analyzed"
               value={skillsData.total_analyzed}
-              sublabel="With 5+ commits"
+              sublabel="With 2+ commits"
             />
             {Object.entries(skillsData.role_distribution).map(([role, count]) => (
               <StatCard key={role} label={role} value={count} />
@@ -927,8 +894,8 @@ export default function Dashboard() {
               <DeveloperRadarChart developers={skillsData.developers} />
             </ChartCard>
           </div>
-          <ChartCard title="Developer Map — Skill Similarity (PCA)">
-            <DeveloperScatterPlot developers={skillsData.developers} />
+          <ChartCard title="Developer Map — Skill Similarity (PCA)" sub="click a developer to open their profile">
+            <DeveloperScatterPlot developers={skillsData.developers} onSelectDeveloper={goToDeveloper} />
           </ChartCard>
           <ChartCard
             title="Developer Skills Heatmap"
@@ -1105,7 +1072,7 @@ export default function Dashboard() {
             style={activeSection === 'developers' ? { flex: 1, minHeight: 0, display: 'flex' } : {}}
           >
             {activeSection === 'developers'
-              ? <DevelopersList results={{ ...results, avatars }} skillsData={skillsData} skillsLoading={skillsLoading} />
+              ? <DevelopersList results={{ ...results, avatars }} skillsData={skillsData} skillsLoading={skillsLoading} initialSelected={devSelection} />
               : (sectionMap[activeSection] || renderOverview)()
             }
           </div>

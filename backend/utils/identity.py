@@ -17,8 +17,10 @@ name matches exactly" rule):
       - the same email under several names (already one person),
       - several emails under one exact name,
       - and the transitive closure of the two.
-  * Generic names ("root", "user", "unknown", a bare email, ...) never create a
-    bridge, so two unrelated people who both committed as "root" stay separate.
+  * Generic names ("root", "user", "unknown", a bare email, ...) and any
+    single-word name never create a bridge, so two unrelated people who both
+    committed as "root" or as "john" stay separate. Only a full name of two or
+    more words is trusted to link two emails.
 
 The public entry point is :func:`build_identity_map`, which returns a mapping
 from every lowercased email to its canonical email (the most frequently used
@@ -54,7 +56,10 @@ def _norm_email(email) -> str:
 def _is_generic_name(name: str) -> bool:
     if name in _GENERIC_NAMES:
         return True
-    if len(name) < 2:
+    # A single-word name (e.g. just "john") collides too easily between
+    # different people, so it must not bridge two emails. Only a full name of
+    # two or more words is trusted to identify one person.
+    if len(name.split()) < 2:
         return True
     # A "name" that is actually an email shouldn't bridge two emails.
     if "@" in name:

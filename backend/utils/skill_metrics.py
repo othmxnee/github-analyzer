@@ -265,42 +265,6 @@ def assign_role(frontend, backend, test, devops, mobile):
     return 'Generalist'
 
 
-def _specialization_index(signals):
-    """How concentrated a developer's work is across activity types.
-
-    1.0 = pure specialist (all work in one area); 0.0 = perfectly even
-    generalist. Computed as 1 - normalized Shannon entropy over the non-zero
-    signal shares. A simple, interpretable companion to the role label: a team
-    of only high-specialization members is more fragile than a balanced one.
-    """
-    import math
-    vals = [v for v in signals.values() if v > 0]
-    total = sum(vals)
-    if total <= 0 or len(vals) <= 1:
-        return 1.0 if len(vals) == 1 else 0.0
-    probs = [v / total for v in vals]
-    entropy = -sum(p * math.log(p) for p in probs)
-    max_entropy = math.log(len(vals))
-    if max_entropy <= 0:
-        return 1.0
-    return round(1.0 - entropy / max_entropy, 3)
-
-
-def _role_confidence(role_signals):
-    """Confidence in the assigned role: gap between the top two role signals.
-
-    (top - second) / top, in [0, 1]. A clear dominant area → high confidence;
-    two near-equal areas (e.g. a genuine Full Stack split) → low confidence,
-    which honestly flags the assignment as borderline rather than certain.
-    """
-    vals = sorted((v for v in role_signals if v is not None), reverse=True)
-    if not vals or vals[0] <= 0:
-        return 0.0
-    top = vals[0]
-    second = vals[1] if len(vals) > 1 else 0.0
-    return round((top - second) / top, 3)
-
-
 def compute_skill_metrics(commits_data):
     """
     Given commits_data (list of dicts with author_email, message, modified_files),
@@ -375,15 +339,6 @@ def compute_skill_metrics(commits_data):
             mobile=pct_mobile
         )
 
-        specialization = _specialization_index({
-            'frontend': pct['frontend'], 'backend': pct_backend,
-            'mobile': pct_mobile, 'test': pct['test'],
-            'devops': pct['devops'], 'docs': pct['docs'], 'build': pct['build'],
-        })
-        confidence = _role_confidence(
-            [pct['frontend'], pct_backend, pct_mobile, pct['test'], pct['devops']]
-        )
-
         rows.append({
             'developer':    dev,
             'total_commits': n_commits,
@@ -401,8 +356,6 @@ def compute_skill_metrics(commits_data):
             'kw_devops':    round(kw_scores['devops'], 3),
             'kw_docs':      round(kw_scores['docs'], 3),
             'role':         role,
-            'specialization': specialization,
-            'role_confidence': confidence,
         })
 
     return rows

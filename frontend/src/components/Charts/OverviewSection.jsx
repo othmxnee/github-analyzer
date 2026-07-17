@@ -221,7 +221,7 @@ function DimensionBar({ label, score, info }) {
 
 const DIMENSION_INFO = {
   Activity:     "How recent and frequent commits are. High score = the repo is actively being worked on (recent commits, steady or growing pace). Low score = stale or abandoned.",
-  Team:         "How many developers are contributing right now vs. lifetime. High score = several people committed in the last 90 days. Low score = the active team has shrunk to one or two people.",
+  Continuity:   "Whether the project can keep going if key people leave, based on the bus factor (how many developers would need to leave before half the codebase knowledge is lost). High score = ownership is shared across several people. Low score = one or two people hold most of the knowledge — risky if they leave.",
   Knowledge:    "Whether knowledge of architecturally important files is spread across the team. Computed from KCI (knowledge concentration) × in-degree (how many other files depend on each file). Low score = critical files are owned by a single person — risky if they leave.",
   Distribution: "How evenly contributions are spread across all developers (based on the Gini coefficient). High score = everyone contributes a fair share. Low score = a small core does most of the work and the long tail rarely commits.",
 }
@@ -326,7 +326,7 @@ export default function OverviewSection({
             <span>Higher is better</span>
           </div>
           <div style={{ padding: "18px" }}>
-            {["Activity", "Team", "Knowledge", "Distribution"].map((dim) => (
+            {["Activity", "Continuity", "Knowledge", "Distribution"].map((dim) => (
               <DimensionBar
                 key={dim}
                 label={dim}

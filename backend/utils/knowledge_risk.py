@@ -7,21 +7,17 @@ scores like one being changed every day. These helpers fold the time dimension
 back in, using data the pipeline already has (per-developer last-commit dates
 and per-file last-modified dates).
 
-Three outputs:
+Two outputs:
 
 * :func:`compute_orphaned_knowledge` — how much of the codebase is owned by
   developers who are no longer active ("knowledge already lost", not just at
   risk). Directly relevant to turnover (cf. Nassif et al. 2017).
 * :func:`compute_active_bus_factor` — the bus factor counting only currently
   active developers. The gap to the historical bus factor is the story.
-* :func:`compute_live_risk` — the file risk score with a recency factor, so the
-  riskiest files surfaced are the ones that are *both* fragile and live.
 
 "inactive" / "stale" is defined relative to the repository's most recent commit
 (not the wall clock), so the metrics are meaningful for long-dormant repos too.
 """
-
-import math
 
 
 def _months_between(later, earlier):
@@ -166,47 +162,6 @@ def compute_active_bus_factor(ownership_results, line_counts,
         "inactive_months": inactive_months,
         "developers": developers[:20],
     }
-
-
-def compute_live_risk(kci_data, in_degree_data, file_last_modified, reference,
-                      half_life_months=12, top_n=10):
-    """Recency-weighted file risk: KCI × normalized in-degree × recency.
-
-    recency decays exponentially with the months since a file was last touched
-    (half-life = ``half_life_months``), so a fragile, architecturally central
-    file that is also being actively changed ranks above an equally fragile but
-    dormant one. Complements (does not replace) the recency-blind risk score.
-    """
-    if not kci_data or not in_degree_data:
-        return []
-
-    common = set(kci_data) & set(in_degree_data)
-    if not common:
-        return []
-
-    indeg_vals = [in_degree_data[f] for f in common]
-    lo, hi = min(indeg_vals), max(indeg_vals)
-
-    decay = math.log(2) / half_life_months if half_life_months > 0 else 0.0
-
-    rows = []
-    for f in common:
-        indeg_norm = (in_degree_data[f] - lo) / (hi - lo) if hi > lo else 0.0
-        last_mod = file_last_modified.get(f)
-        months_idle = _months_between(reference, last_mod) if last_mod is not None else half_life_months
-        recency = math.exp(-decay * months_idle)
-        score = kci_data[f] * indeg_norm * recency
-        rows.append({
-            "file": f,
-            "risk_score": round(float(score), 4),
-            "kci": round(float(kci_data[f]), 3),
-            "in_degree": int(in_degree_data[f]),
-            "months_idle": round(months_idle, 1),
-            "recency": round(float(recency), 3),
-        })
-
-    rows.sort(key=lambda r: r["risk_score"], reverse=True)
-    return rows[:top_n]
 
 
 def _fmt(ts):
