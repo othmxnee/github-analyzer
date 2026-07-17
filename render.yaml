@@ -43,9 +43,10 @@ services:
   - type: web
     name: github-analyzer-web
     runtime: static
-    buildCommand: npm ci && npm run build
-    staticPublishPath: ./frontend/dist
     rootDir: ./frontend
+    # Paths below are relative to rootDir, so this is frontend/dist on disk.
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
     autoDeploy: false
     envVars:
       - key: VITE_API_URL
