@@ -5,7 +5,11 @@ services:
   - type: web
     name: github-analyzer-api
     runtime: docker
-    plan: starter          # free tier has no disk for clones and sleeps mid-analysis
+    # Free tier: 512 MB RAM and a sleep after ~15 min idle. Clones land in the
+    # container's ephemeral filesystem and are deleted after each analysis, so
+    # no persistent disk is needed — but see the memory ceiling caveat in
+    # DEPLOY.md before analysing large repositories.
+    plan: free
     region: frankfurt
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
