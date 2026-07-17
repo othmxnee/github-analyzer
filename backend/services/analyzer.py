@@ -31,6 +31,15 @@ logger = logging.getLogger(__name__)
 
 MAX_COMMITS = 2000
 
+# extract_data() already discards everything older than the MAX_COMMITS most
+# recent commits, so fetching full history just to throw it away wastes disk and
+# clone time. Depth is capped one above MAX_COMMITS so `git rev-list --count`
+# can still tell "exactly at the cap" from "deeper than the cap".
+# Trade-off: in a shallow clone `git blame` attributes lines to the oldest commit
+# in the window rather than the true original, so KCI ages saturate at the
+# boundary — acceptable, since those commits are outside the analysis anyway.
+CLONE_DEPTH = MAX_COMMITS + 1
+
 from utils.bot_detection import is_bot as _is_bot_id
 from utils.voronoi_treemap import build_voronoi_data
 from utils.identity import build_identity_map, canonicalize_email, merged_alias_count
@@ -38,9 +47,8 @@ from utils.knowledge_risk import (
     compute_dev_last_active,
     compute_orphaned_knowledge,
     compute_active_bus_factor,
-    compute_live_risk,
 )
-from utils.collaboration import build_collaboration_network, build_cochange_coupling
+from utils.collaboration import build_collaboration_network
 
 INACTIVE_MONTHS = 12  # a developer/file is "inactive" after this many idle months
 
@@ -95,7 +103,7 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None):
         _ANALYSIS_PHASE[repo_url] = 'cloning'
         clone_url = _build_clone_url(repo_url, token, provider)
         result = subprocess.run(
-            ["git", "clone", clone_url, tmp_dir],
+            ["git", "clone", f"--depth={CLONE_DEPTH}", "--single-branch", clone_url, tmp_dir],
             capture_output=True,
             text=True,
         )
@@ -595,13 +603,6 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
 
     # ── Time-aware knowledge risk ────────────────────────────────────────
     dev_last_active, reference_ts = compute_dev_last_active(df_commits)
-    # Last-modified date per (normalized) file, for the recency factor.
-    file_last_modified = {}
-    for path, ts in zip(df_files["file_id"], df_files["author_date"]):
-        key = normalize_path(str(path))
-        cur = file_last_modified.get(key)
-        if cur is None or ts > cur:
-            file_last_modified[key] = ts
 
     orphaned_knowledge = compute_orphaned_knowledge(
         ownership_results, line_counts, dev_last_active, reference_ts,
@@ -611,16 +612,9 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
         ownership_results, line_counts, dev_last_active, reference_ts,
         historical_bus_factor=int(bus_factor), inactive_months=INACTIVE_MONTHS,
     )
-    live_risk = compute_live_risk(
-        kci_data, in_degree_data, file_last_modified, reference_ts,
-        half_life_months=INACTIVE_MONTHS, top_n=None,
-    )
 
-    # ── Collaboration + co-change structure ──────────────────────────────
+    # ── Collaboration structure ──────────────────────────────────────────
     collaboration = build_collaboration_network(df_files)
-    cochange_coupling = build_cochange_coupling(
-        df_files, architecture_data.get("edges", []), top_n=None,
-    )
 
     summary = {
         "total_commits": int(df_commits["commit_hash"].nunique()),
@@ -789,11 +783,9 @@ def compute_metrics(repo_path, df_commits, df_files, commits_data_raw=None):
         "kci": kci_list,
         "in_degree": in_degree_list,
         "risk_files": risk_list,
-        "live_risk_files": live_risk,
         "orphaned_knowledge": orphaned_knowledge,
         "active_bus_factor": active_bus_factor,
         "collaboration": collaboration,
-        "cochange_coupling": cochange_coupling,
         "hotspot_files": hotspot_files_list,
         "dev_file_matrix": dev_file_matrix,
         "dev_file_matrix_full": dev_file_matrix_full,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { getRepoAnalysisResult, startRepoAnalysis } from '../services/api'
+import { getRepoAnalysisResult, startRepoAnalysis, API_URL } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useReveal, useEntrance, CountUp, useInView } from '../hooks/useMotion'
 import AuthButton from '../components/AuthButton'
@@ -191,7 +191,7 @@ const FEATURES = [
   { t:'Developer activity',      d:'Commit timelines, rankings, and inter-commit interval analysis across the full Git history.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
   { t:'Contribution inequality', d:'Gini coefficient and Lorenz curve showing how evenly work is spread across contributors.',           icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
   { t:'Knowledge ownership',     d:'Line-level ownership tracking and KCI index to detect knowledge silos and bus factor risks.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> },
-  { t:'Architectural risk',      d:'Dependency graphs and PageRank centrality to identify structurally critical files and coupling.',    icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5.5" y2="16.5"/><line x1="12" y1="8" x2="18.5" y2="16.5"/></svg> },
+  { t:'Architectural risk',      d:'Dependency graphs and in-degree centrality to identify structurally critical files and coupling.',    icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5.5" y2="16.5"/><line x1="12" y1="8" x2="18.5" y2="16.5"/></svg> },
   { t:'Code hotspots',           d:'Modification frequency surfaces your highest-churn files — the most active change targets.',        icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0"/></svg> },
   { t:'Risk scoring',            d:'Composite scores combining architectural centrality and ownership concentration into clear signals.',icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
 ]
@@ -324,7 +324,7 @@ export default function Home() {
       saveHistory(url)
       setRepoHistory(loadHistory())
       // Kick off skills analysis in the background so it's ready when user clicks the tab
-      fetch('http://localhost:5000/analyze/skills', {
+      fetch(`${API_URL}/analyze/skills`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -483,7 +483,7 @@ export default function Home() {
         {[
           { n: 6,      l: 'Analysis dimensions' },
           { n: 18,     l: 'Chart types', suffix: '+' },
-          { n: 15,     l: 'Metrics per developer' },
+          { n: 12,     l: 'Metrics per developer' },
           { n: 7,      l: 'Roles detected' },
           { n: 'Zero', l: 'Auth required' },
         ].map(({ n, l, suffix }) => (
@@ -528,7 +528,7 @@ export default function Home() {
             <div className="hp-s-label">Developer Role Detection</div>
             <div className="hp-s-title">Automatically profile every contributor</div>
             <div className="hp-s-sub">
-              15 metrics per developer — file extension ratios, folder path patterns, and commit message
+              12 metrics per developer — file extension ratios, folder path patterns, and commit message
               keywords — then K-Means clustering assigns precise technical roles.
             </div>
           </div>
@@ -582,7 +582,7 @@ export default function Home() {
           <div className="hp-steps hp-reveal">
             {[
               {n:'01',t:'Paste a repository URL',d:'Any public GitHub repository. No authentication, API keys, or configuration needed.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>},
-              {n:'02',t:'Analysis runs automatically',d:'PyDriller extracts commit history, file changes, and authorship data and computes all 15 metrics per developer.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>},
+              {n:'02',t:'Analysis runs automatically',d:'PyDriller extracts commit history, file changes, and authorship data and computes all 12 metrics per developer.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>},
               {n:'03',t:'Explore the dashboard',d:'Interactive charts, heatmaps, dependency graphs, PCA skill maps, and risk tables — all in one place.',icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
             ].map(({n,t,d,icon},i) => (
               <div className="hp-step" key={n} style={i>0?{borderLeft:'1px solid var(--b)'}:{}}>
@@ -602,7 +602,7 @@ export default function Home() {
               </div>
               {[
                 {color:'var(--green)',title:'PyDriller extraction',detail:'— full commit history, file diffs, and author metadata'},
-                {color:'var(--ac)',title:'15 metrics per developer',detail:'— file extensions, folder paths, commit keywords'},
+                {color:'var(--ac)',title:'12 metrics per developer',detail:'— file extensions, folder paths, commit keywords'},
                 {color:'var(--amber)',title:'K-Means + PCA',detail:'— clustering resolves ambiguous profiles, PCA maps skill space'},
               ].map(({color,title,detail}) => (
                 <div key={title} style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:14}}>
@@ -723,7 +723,7 @@ const TERM_LINES = [
   { c: 'gray',  text: '→ Cloning repository...' },
   { c: 'green', text: '✓ 3,847 commits loaded' },
   { c: 'green', text: '✓ 142 contributors found' },
-  { c: 'gray',  text: '→ Computing 15 metrics / dev...' },
+  { c: 'gray',  text: '→ Computing 12 metrics / dev...' },
   { c: 'blue',  text: '  gini_coefficient = 0.74' },
   { c: 'amber', text: '  ⚠ bus_factor = 2 (critical)' },
   { c: 'gray',  text: '→ Detecting developer roles...' },
