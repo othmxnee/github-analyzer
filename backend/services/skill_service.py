@@ -6,7 +6,10 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 import numpy as np
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
 
 _cache = {}
 _status = {}
@@ -155,6 +158,32 @@ def _compute_pca_2d(rows, feature_cols, key_x='pca_x', key_y='pca_y'):
         row[key_y] = round(float(X_pca[i, 1] if X_pca.shape[1] > 1 else 0), 4)
 
     return rows
+
+
+def warm_up_umap():
+    """Force numba's JIT compilation at boot instead of on the first request.
+
+    umap runs on numba, which compiles to machine code the first time it runs —
+    tens of seconds on a shared/throttled CPU, paid by whoever happens to
+    trigger the first Developer Roles analysis. Fitting a throwaway matrix here
+    moves that cost into container startup. Parameters mirror _compute_umap_2d
+    so the same code paths get compiled.
+
+    Best-effort: any failure just leaves the JIT cold, exactly as before.
+    """
+    try:
+        import umap
+
+        X = np.random.RandomState(0).rand(12, len(FEATURE_COLS))
+        umap.UMAP(
+            n_components=2,
+            n_neighbors=min(15, len(X) - 1),
+            min_dist=0.1,
+            random_state=42,
+        ).fit_transform(MinMaxScaler().fit_transform(X))
+        logger.info('UMAP warm-up complete — numba JIT primed')
+    except Exception as e:
+        logger.warning('UMAP warm-up skipped (%s); first analysis will be slower', e)
 
 
 def _compute_umap_2d(rows, feature_cols):

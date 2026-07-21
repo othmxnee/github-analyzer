@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify
@@ -12,6 +13,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 from extensions import limiter
 from routes.analyze import analyze_bp
 from routes.auth import auth_bp
+from services.skill_service import warm_up_umap
 
 IS_PRODUCTION = os.environ.get('FLASK_ENV') == 'production'
 
@@ -45,6 +47,12 @@ CORS(app, origins=[o.strip() for o in _origins.split(',') if o.strip()], support
 
 app.register_blueprint(analyze_bp)
 app.register_blueprint(auth_bp)
+
+
+# Prime numba's JIT in the background so the first Developer Roles request does
+# not pay ~tens of seconds of compilation. Threaded so gunicorn can bind the
+# port immediately and Render's health check still passes right away.
+threading.Thread(target=warm_up_umap, daemon=True).start()
 
 
 @app.errorhandler(429)
