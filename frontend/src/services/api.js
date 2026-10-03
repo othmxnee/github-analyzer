@@ -97,3 +97,5 @@ export const createWatch = (repoUrl, { email, slackWebhookUrl } = {}) =>
   request('POST', '/watch', { body: { repo_url: repoUrl, email: email || null, slack_webhook_url: slackWebhookUrl || null } })
 export const listWatches = () => request('GET', '/watches')
 export const deleteWatch = (id) => request('DELETE', `/watch/${id}`)
+export const getPortfolio = () => request('GET', '/portfolio')
+export const getPortfolioPeople = () => request('GET', '/portfolio/people')

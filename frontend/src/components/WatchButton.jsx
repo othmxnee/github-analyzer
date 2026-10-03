@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { API_URL, createWatch, listWatches } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import '../styles/Watch.css'
@@ -65,7 +66,10 @@ export default function WatchButton({ repoUrl }) {
                 <a className="dash-pdf-btn" href={`${API_URL}/auth/github`}>Sign in with GitHub</a>
               </div>
             ) : done ? (
-              <div className="wb-done">{done}</div>
+              <>
+                <div className="wb-done">{done}</div>
+                <div className="wb-actions"><Link className="dash-reanalyze-btn" to="/portfolio">See all your repositories →</Link></div>
+              </>
             ) : (
               <form onSubmit={submit} className="wb-form">
                 <label className="wb-label">Email

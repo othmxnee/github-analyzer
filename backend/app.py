@@ -15,6 +15,7 @@ from extensions import limiter
 from routes.analyze import analyze_bp
 from routes.auth import auth_bp
 from routes.watch import watch_bp
+from routes.portfolio import portfolio_bp
 from services.skill_service import warm_up_umap
 
 IS_PRODUCTION = os.environ.get('FLASK_ENV') == 'production'
@@ -50,6 +51,7 @@ CORS(app, origins=[o.strip() for o in _origins.split(',') if o.strip()], support
 app.register_blueprint(analyze_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(watch_bp)
+app.register_blueprint(portfolio_bp)
 
 # Optional persistence: with DATABASE_URL set, bind and migrate at start-up.
 # A failed migration stops the boot on purpose (a deploy should fail loudly,

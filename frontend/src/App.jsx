@@ -9,6 +9,7 @@ import Loader from './components/Loader'
 const Home = lazy(() => import('./pages/Home'))
 const LocalHome = lazy(() => import('./pages/LocalHome'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Portfolio = lazy(() => import('./pages/Portfolio'))
 
 function App() {
   const navigate = useNavigate()
@@ -29,6 +30,7 @@ function App() {
         <Routes>
           <Route path="/" element={isEmbedded ? <LocalHome /> : <Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          {!isEmbedded && <Route path="/portfolio" element={<Portfolio />} />}
         </Routes>
       </Suspense>
     </div>
