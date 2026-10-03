@@ -5,7 +5,10 @@ from collections import defaultdict
 # ---------- File extension classification ----------
 FRONTEND_EXTENSIONS  = {'.css', '.html', '.scss', '.sass', '.less', '.styl',
                         '.vue', '.svelte', '.elm', '.erb', '.ejs', '.pug',
-                        '.hbs', '.astro'}
+                        '.hbs', '.astro',
+                        # UI image / font assets are frontend work, not 'other'.
+                        '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp',
+                        '.ico', '.woff', '.woff2', '.ttf', '.eot'}
 BACKEND_PY_EXT       = {'.py'}
 BACKEND_JAVA_EXT     = {'.java', '.kt', '.scala'}
 # Compiled / systems / server backend languages. These have no frontend
@@ -16,14 +19,22 @@ BACKEND_SYS_EXT      = {'.go', '.rs', '.c', '.cpp', '.cc', '.cxx',
                         '.h', '.hpp', '.cs', '.rb', '.php',
                         '.lua', '.fs', '.ex', '.exs', '.clj', '.cljs',
                         '.r', '.sql', '.graphql', '.gql', '.proto',
-                        '.ipynb'}
-DEVOPS_EXTENSIONS    = {'.yml', '.yaml', '.sh', '.dockerfile', '.toml', '.cfg', '.ini'}
+                        '.ipynb',
+                        # hand-written assembly (x265 SIMD kernels) and Prisma
+                        # DB schemas are backend/systems work, not 'other'.
+                        '.asm', '.s', '.prisma'}
+DEVOPS_EXTENSIONS    = {'.yml', '.yaml', '.sh', '.dockerfile', '.toml', '.cfg',
+                        '.ini', '.bat', '.ps1'}
+# Build-tooling extensions (CMake scripts, prebuilt Java jars, m4/autoconf).
+BUILD_EXTENSIONS     = {'.cmake', '.jar', '.m4', '.mk'}
 BUILD_FILES          = {'pom.xml', 'build.gradle', 'build.gradle.kts',
                         'requirements.txt', 'setup.py', 'setup.cfg',
                         'pyproject.toml', 'package.json', 'build.xml',
                         'gemfile', 'gemfile.lock', 'go.mod', 'go.sum',
                         'cargo.toml', 'cargo.lock', 'pubspec.yaml', 'pubspec.lock'}
-DOC_EXTENSIONS       = {'.md', '.rst', '.txt', '.adoc'}
+# .po/.pot/.xliff are translation (gettext) files; .properties often holds i18n
+# strings. Treated as docs so translators are not dumped into 'other'.
+DOC_EXTENSIONS       = {'.md', '.rst', '.txt', '.adoc', '.po', '.pot', '.xliff', '.properties'}
 # Objective-C / Objective-C++ sources, used almost only in iOS/macOS apps.
 IOS_OBJC_EXT         = {'.m', '.mm'}
 
@@ -131,6 +142,14 @@ def detect_mobile_roots(paths):
                 module = os.path.dirname(norm)
             if module:
                 roots.add(module)
+            else:
+                # Manifest at the repo root (old-style Android layout, e.g.
+                # F-Droid keeps app code under src/org/... with the manifest at
+                # top level). There is no module dir to scope to, so mark the
+                # whole repo as an Android project with a '*' sentinel; .java/.kt
+                # then counts as mobile everywhere EXCEPT explicit backend/server
+                # folders (see _under_mobile_root), preserving the monorepo case.
+                roots.add('*')
     return roots
 
 
@@ -142,8 +161,15 @@ def detect_android_roots(paths):
 def _under_mobile_root(path_lower, mobile_roots):
     if not mobile_roots:
         return False
+    # '*' means the whole repo is an Android project (root-level manifest). Its
+    # .java/.kt is mobile unless the file sits in an explicit server/backend
+    # folder, so a monorepo with a real backend module still splits correctly.
+    if '*' in mobile_roots:
+        parts = set(path_lower.split('/'))
+        if not (parts & BACKEND_FOLDERS):
+            return True
     return any(path_lower == r or path_lower.startswith(r + '/')
-               for r in mobile_roots)
+               for r in mobile_roots if r != '*')
 
 
 def get_file_category(filepath, mobile_roots=None):
@@ -162,6 +188,14 @@ def get_file_category(filepath, mobile_roots=None):
     ext        = os.path.splitext(filename)[1]
     parts      = path_lower.replace('\\', '/').split('/')
     parts_set  = set(parts)
+
+    # Vendored third-party code (copied libraries) is not the developer's own
+    # work: F-Droid stores spongycastle/zxing/etc under extern/, and their large
+    # .java line counts wrongly inflate a maintainer's backend share. Attribute
+    # such files to 'other' so they don't drive the role.
+    if parts_set & {'extern', 'externals', 'third_party', 'third-party',
+                    'vendor', 'vendored', 'libs-ext'}:
+        return 'other'
 
     # Test. "spec" must be a whole token (foo.spec.ts, user_spec.rb), not a
     # substring, so files like pubspec.yaml or specification.md are not tests.
@@ -182,6 +216,10 @@ def get_file_category(filepath, mobile_roots=None):
     # rule so build files that happen to be .toml/.yaml (Cargo.toml,
     # pubspec.yaml) are build, not devops.
     if filename in BUILD_FILES:
+        return 'build'
+
+    # Build-tooling extensions (CMake scripts, jars, m4/make fragments).
+    if ext in BUILD_EXTENSIONS:
         return 'build'
 
     # DevOps by generic config extension (.yml, .yaml, .toml, .sh, ...).
@@ -241,21 +279,32 @@ def get_keyword_scores(message):
             for role in KEYWORDS}
 
 
-def assign_role(frontend, backend, test, devops, mobile):
-    # Tester only when testing is the developer's primary work: test files must
-    # be a clear majority of their changes AND outweigh production code (backend
-    # plus frontend together). A backend or frontend developer who also writes
-    # tests therefore keeps their production role; only a QA-focused contributor,
-    # whose output is mostly test files, is labelled Tester. This avoids the
-    # earlier inflation where a >40% test share alone forced the Tester label.
-    if test >= THRESHOLDS['tester'] and test > (backend + frontend):
+def assign_role(frontend, backend, test, devops, mobile, test_file_share=None,
+                kw_test=0.0, kw_backend=0.0, kw_frontend=0.0):
+    # Tester only when testing is the developer's primary work: test files are a
+    # clear majority (>=60% by FILE count, not lines -- one big test file inflates
+    # the line share and mislabels feature devs) AND test lines outweigh all
+    # production/infra work combined. This keeps QA-focused contributors while
+    # letting feature developers who also write tests keep their production role.
+    #
+    # KNOWN LIMITATION: in test-heavy *library* projects (e.g. a parser with a
+    # large per-issue regression suite) a feature author's "implement X + its big
+    # test" is indistinguishable in commit data from a QA tester's work. No
+    # line/file/keyword threshold separates them; some Backend devs are still
+    # labelled Tester there. This is a fundamental ambiguity, not a tuning gap.
+    tshare = test_file_share if test_file_share is not None else test
+    if tshare >= THRESHOLDS['tester'] and test > (backend + frontend + mobile + devops):
         return 'Tester'
     if devops >= THRESHOLDS['devops'] and devops > backend and devops > frontend:
         return 'DevOps'
     if mobile >= THRESHOLDS['mobile']:
         return 'Mobile'
-    # Full Stack: both stacks meaningfully present (>= 10%) and neither dominates by more than 2x
-    if (frontend >= 0.10 and backend >= 0.10 and
+    # Full Stack: both stacks must be a SUBSTANTIAL share (>= 25% each) and
+    # roughly balanced (neither more than ~2x the other). The old 10% floor was
+    # calibrated for line shares; under file-based shares it fired far too easily
+    # (a frontend dev who touches a few backend files looked "balanced"),
+    # collapsing Full Stack precision. 25% keeps it to genuinely dual-stack devs.
+    if (frontend >= 0.20 and backend >= 0.20 and
             min(frontend, backend) / max(frontend, backend) >= 0.5):
         return 'Full Stack'
     if frontend >= THRESHOLDS['frontend']:
@@ -280,6 +329,7 @@ def compute_skill_metrics(commits_data):
     Returns a list of dicts (one per developer).
     """
     lines_by_category = defaultdict(lambda: defaultdict(int))
+    files_by_category = defaultdict(lambda: defaultdict(int))  # count of file touches
     keyword_hits      = defaultdict(lambda: defaultdict(int))
     total_commits     = defaultdict(int)
 
@@ -308,6 +358,7 @@ def compute_skill_metrics(commits_data):
             category = get_file_category(f.get('path'), mobile_roots)
             lines    = f.get('added', 0) or 0
             lines_by_category[dev][category] += lines
+            files_by_category[dev][category] += 1
 
     rows = []
     for dev in total_commits:
@@ -315,11 +366,17 @@ def compute_skill_metrics(commits_data):
             continue
 
         total_lines = sum(lines_by_category[dev].values())
+        total_files = sum(files_by_category[dev].values())
         n_commits = total_commits[dev]
 
-        # Percentages per category (safe divide — fall back to keyword-only if no line data)
-        if total_lines > 0:
-            pct = {cat: lines_by_category[dev][cat] / total_lines for cat in CATEGORIES}
+        # Percentages per category are measured by FILE-TOUCH COUNT, not lines.
+        # Line share is dominated by a few huge files — a lockfile, generated
+        # JSON, a bundled asset — which swamp a developer's real work (e.g. a
+        # frontend founder read as DevOps because one big config outweighs
+        # thousands of .vue files). Counting files reflects what the developer
+        # actually works on. total_lines is kept for reporting only.
+        if total_files > 0:
+            pct = {cat: files_by_category[dev][cat] / total_files for cat in CATEGORIES}
         else:
             pct = {cat: 0.0 for cat in CATEGORIES}
 
@@ -327,6 +384,9 @@ def compute_skill_metrics(commits_data):
         pct_backend = (pct['backend_py'] + pct['backend_java'] +
                        pct['backend_js'] + pct['backend_sys'])
         pct_mobile = pct['mobile']
+
+        # Test file share == pct['test'] now that percentages are file-based.
+        test_file_share = pct['test']
 
         # Keyword ratios
         kw_scores = {role: keyword_hits[dev][role] / n_commits for role in KEYWORDS}
@@ -336,7 +396,11 @@ def compute_skill_metrics(commits_data):
             backend=pct_backend,
             test=pct['test'],
             devops=pct['devops'],
-            mobile=pct_mobile
+            mobile=pct_mobile,
+            test_file_share=test_file_share,
+            kw_test=kw_scores['test'],
+            kw_backend=kw_scores['backend'],
+            kw_frontend=kw_scores['frontend'],
         )
 
         rows.append({
