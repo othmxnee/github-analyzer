@@ -113,21 +113,41 @@ def _resolve_generalists(rows):
         else:
             cluster_dominant[c] = 'Generalist'
 
-    # Step 3: resolve Generalists BUT only if they have minimum activity
+    # Step 3: resolve Generalists to their cluster's dominant role, BUT only when
+    # the developer has real evidence FOR THAT SPECIFIC role. Promoting on
+    # max_pct alone was wrong: a docs-heavy developer with pct_backend=0.26 and
+    # pct_frontend=0 could be pulled into a Frontend cluster and labelled Frontend
+    # despite writing zero frontend code. We now require the developer's own
+    # percentage in the target role to clear a floor, so a role is never assigned
+    # to someone with no activity in it.
+    ROLE_PCT = {
+        'Frontend': 'pct_frontend', 'Backend': 'pct_backend',
+        'Mobile': 'pct_mobile', 'DevOps': 'pct_devops', 'Tester': 'pct_test',
+    }
+    PROMOTE_FLOOR = 0.15
     for row in rows:
         if row['role'] == 'Generalist':
             row['role_original'] = 'Generalist'
-
-            max_pct = max(
-                row.get('pct_frontend', 0),
-                row.get('pct_backend', 0),
-                row.get('pct_test', 0),
-                row.get('pct_devops', 0),
-                row.get('pct_mobile', 0),
-            )
-
-            if max_pct >= 0.15:
-                dominant = cluster_dominant.get(row['cluster'], 'Generalist')
+            dominant = cluster_dominant.get(row['cluster'], 'Generalist')
+            evidence_key = ROLE_PCT.get(dominant)
+            own_pct = row.get(evidence_key, 0) if evidence_key else 0
+            if dominant == 'Tester':
+                # NEVER promote to Tester by clustering. The Tester rule in
+                # assign_role already applies the file-share test; pct_test (a
+                # LINE share) is exactly the inflated signal that mislabels a
+                # backend dev who added one big test file. Letting the cluster
+                # step re-assign Tester on pct_test would re-introduce the bug
+                # assign_role just fixed (e.g. a dev with 4 backend .py edits and
+                # 2 large test files: rule=Generalist, but cluster would flip him
+                # to Tester on pct_test=0.90). So a Generalist stays Generalist.
+                row['role'] = 'Generalist'
+            elif dominant == 'Full Stack':
+                # no single pct column: require both stacks present
+                if row.get('pct_frontend', 0) >= 0.10 and row.get('pct_backend', 0) >= 0.10:
+                    row['role'] = dominant
+                else:
+                    row['role'] = 'Generalist'
+            elif evidence_key and own_pct >= PROMOTE_FLOOR:
                 row['role'] = dominant
             else:
                 row['role'] = 'Generalist'
