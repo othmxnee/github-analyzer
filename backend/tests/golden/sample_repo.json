@@ -1,0 +1,2471 @@
+{
+ "results": {
+  "active_bus_factor": {
+   "active_bus_factor": 1,
+   "active_developers": 1,
+   "developers": [
+    {
+     "name": "alice@example.com",
+     "ownership": 0.524
+    }
+   ],
+   "historical_bus_factor": 1,
+   "inactive_months": 12,
+   "knowledge_held_by_active_pct": 0.5239,
+   "reaches_half": true
+  },
+  "architecture": {
+   "edges": [
+    {
+     "source": "api/search.py",
+     "target": "api/core.py"
+    },
+    {
+     "source": "api/routes.py",
+     "target": "api/core.py"
+    },
+    {
+     "source": "api/entities.py",
+     "target": "api/core.py"
+    },
+    {
+     "source": "api/core.py",
+     "target": "legacy/engine.py"
+    }
+   ],
+   "nodes": [
+    {
+     "degree": 3,
+     "id": "api/core.py"
+    },
+    {
+     "degree": 1,
+     "id": "legacy/engine.py"
+    },
+    {
+     "degree": 0,
+     "id": "api/search.py"
+    },
+    {
+     "degree": 0,
+     "id": "api/routes.py"
+    },
+    {
+     "degree": 0,
+     "id": "api/entities.py"
+    }
+   ]
+  },
+  "bus_factor": 1,
+  "busfactor_simulation": {
+   "developers": [
+    {
+     "name": "alice@example.com",
+     "ownership": 0.523936170212766
+    },
+    {
+     "name": "gary@example.com",
+     "ownership": 0.18351063829787234
+    },
+    {
+     "name": "bob@example.com",
+     "ownership": 0.14095744680851063
+    },
+    {
+     "name": "carol@example.com",
+     "ownership": 0.13297872340425532
+    },
+    {
+     "name": "erin@example.com",
+     "ownership": 0.018617021276595744
+    }
+   ],
+   "simulation": [
+    {
+     "knowledge_lost": 0.523936170212766,
+     "removed": 1
+    },
+    {
+     "knowledge_lost": 0.7074468085106382,
+     "removed": 2
+    },
+    {
+     "knowledge_lost": 0.8484042553191489,
+     "removed": 3
+    },
+    {
+     "knowledge_lost": 0.9813829787234042,
+     "removed": 4
+    },
+    {
+     "knowledge_lost": 0.9999999999999999,
+     "removed": 5
+    }
+   ]
+  },
+  "collaboration": {
+   "edges": [],
+   "nodes": []
+  },
+  "commit_frequency": [
+   {
+    "developer": "alice@example.com",
+    "points": [
+     {
+      "count": 11,
+      "date": "2022-02-28 00:00:00+00:00"
+     },
+     {
+      "count": 10,
+      "date": "2022-03-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-04-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-06-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 3,
+      "date": "2022-08-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-09-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-10-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-11-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-12-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-01-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-02-28 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-03-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-04-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-06-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-08-31 00:00:00+00:00"
+     },
+     {
+      "count": 1,
+      "date": "2023-09-30 00:00:00+00:00"
+     },
+     {
+      "count": 4,
+      "date": "2023-10-31 00:00:00+00:00"
+     },
+     {
+      "count": 1,
+      "date": "2023-11-30 00:00:00+00:00"
+     }
+    ]
+   },
+   {
+    "developer": "bob@example.com",
+    "points": [
+     {
+      "count": 7,
+      "date": "2022-04-30 00:00:00+00:00"
+     },
+     {
+      "count": 5,
+      "date": "2022-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-06-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 1,
+      "date": "2022-08-31 00:00:00+00:00"
+     }
+    ]
+   },
+   {
+    "developer": "carol@example.com",
+    "points": [
+     {
+      "count": 8,
+      "date": "2022-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 2,
+      "date": "2022-06-30 00:00:00+00:00"
+     }
+    ]
+   },
+   {
+    "developer": "erin@example.com",
+    "points": [
+     {
+      "count": 5,
+      "date": "2022-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 2,
+      "date": "2022-08-31 00:00:00+00:00"
+     }
+    ]
+   },
+   {
+    "developer": "gary@example.com",
+    "points": [
+     {
+      "count": 6,
+      "date": "2022-01-31 00:00:00+00:00"
+     }
+    ]
+   }
+  ],
+  "dev_file_matrix": {
+   "developers": [
+    "alice@example.com",
+    "bob@example.com",
+    "carol@example.com",
+    "erin@example.com",
+    "gary@example.com"
+   ],
+   "files": [
+    "api/core.py",
+    "android/app/src/main/java/com/example/MainActivity.kt",
+    "api/routes.py",
+    "legacy/engine.py",
+    "web/src/components/App.jsx",
+    "web/src/components/Header.jsx",
+    "api/services.py",
+    "api/models.py",
+    "web/src/components/Chart.jsx",
+    "tests/test_feature_1.py",
+    "tests/test_feature_0.py",
+    "legacy/parser.py",
+    "tests/test_feature_2.py",
+    "tests/test_feature_3.py",
+    "api/search.py",
+    "api/entities.py"
+   ],
+   "values": [
+    [
+     78,
+     0,
+     47,
+     0,
+     0,
+     0,
+     16,
+     34,
+     0,
+     0,
+     0,
+     38,
+     0,
+     0,
+     18,
+     4
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     21,
+     17,
+     0,
+     0,
+     15,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     15,
+     15,
+     0,
+     10,
+     10,
+     0,
+     0
+    ],
+    [
+     0,
+     7,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     69,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     38,
+     0,
+     0,
+     0,
+     0
+    ]
+   ]
+  },
+  "dev_file_matrix_full": {
+   "developers": [
+    "alice@example.com",
+    "bob@example.com",
+    "carol@example.com",
+    "erin@example.com",
+    "gary@example.com"
+   ],
+   "files": [
+    "api/core.py",
+    "android/app/src/main/java/com/example/MainActivity.kt",
+    "api/routes.py",
+    "legacy/engine.py",
+    "web/src/components/App.jsx",
+    "web/src/components/Header.jsx",
+    "api/services.py",
+    "api/models.py",
+    "web/src/components/Chart.jsx",
+    "tests/test_feature_1.py",
+    "tests/test_feature_0.py",
+    "legacy/parser.py",
+    "tests/test_feature_2.py",
+    "tests/test_feature_3.py",
+    "api/search.py",
+    "api/entities.py"
+   ],
+   "values": [
+    [
+     78,
+     0,
+     47,
+     0,
+     0,
+     0,
+     16,
+     34,
+     0,
+     0,
+     0,
+     38,
+     0,
+     0,
+     18,
+     4
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     21,
+     17,
+     0,
+     0,
+     15,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     15,
+     15,
+     0,
+     10,
+     10,
+     0,
+     0
+    ],
+    [
+     0,
+     7,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     69,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     38,
+     0,
+     0,
+     0,
+     0
+    ]
+   ]
+  },
+  "dev_stats": {
+   "alice@example.com": {
+    "first_commit": "2022-02-05",
+    "last_commit": "2023-11-10",
+    "top_keywords": [
+     "backend",
+     "feature",
+     "recent",
+     "work",
+     "search",
+     "add",
+     "api",
+     "skeleton"
+    ],
+    "total_commits_raw": 31,
+    "total_modifications": 30,
+    "unique_files": 7
+   },
+   "bob@example.com": {
+    "first_commit": "2022-04-02",
+    "last_commit": "2022-08-16",
+    "top_keywords": [
+     "tweak",
+     "frontend",
+     "skeleton",
+     "search",
+     "box"
+    ],
+    "total_commits_raw": 16,
+    "total_modifications": 13,
+    "unique_files": 3
+   },
+   "carol@example.com": {
+    "first_commit": "2022-05-14",
+    "last_commit": "2022-06-05",
+    "top_keywords": [
+     "tests",
+     "batch"
+    ],
+    "total_commits_raw": 10,
+    "total_modifications": 10,
+    "unique_files": 4
+   },
+   "dave@example.com": {
+    "first_commit": "2022-06-07",
+    "last_commit": "2022-08-10",
+    "top_keywords": [
+     "ops",
+     "change",
+     "container",
+     "release",
+     "script",
+     "executable"
+    ],
+    "total_commits_raw": 10,
+    "total_modifications": 0,
+    "unique_files": 0
+   },
+   "erin@example.com": {
+    "first_commit": "2022-07-11",
+    "last_commit": "2022-08-05",
+    "top_keywords": [
+     "mobile",
+     "screen",
+     "android",
+     "app"
+    ],
+    "total_commits_raw": 7,
+    "total_modifications": 7,
+    "unique_files": 1
+   },
+   "gary@example.com": {
+    "first_commit": "2022-01-04",
+    "last_commit": "2022-01-16",
+    "top_keywords": [
+     "extend",
+     "legacy",
+     "engine",
+     "initial",
+     "import"
+    ],
+    "total_commits_raw": 5,
+    "total_modifications": 6,
+    "unique_files": 2
+   }
+  },
+  "dev_timeline": {
+   "alice@example.com": [
+    {
+     "count": 11,
+     "date": "2022-02-01"
+    },
+    {
+     "count": 10,
+     "date": "2022-03-01"
+    },
+    {
+     "count": 3,
+     "date": "2022-08-01"
+    },
+    {
+     "count": 1,
+     "date": "2023-09-01"
+    },
+    {
+     "count": 4,
+     "date": "2023-10-01"
+    },
+    {
+     "count": 1,
+     "date": "2023-11-01"
+    }
+   ],
+   "bob@example.com": [
+    {
+     "count": 7,
+     "date": "2022-04-01"
+    },
+    {
+     "count": 5,
+     "date": "2022-05-01"
+    },
+    {
+     "count": 1,
+     "date": "2022-08-01"
+    }
+   ],
+   "carol@example.com": [
+    {
+     "count": 8,
+     "date": "2022-05-01"
+    },
+    {
+     "count": 2,
+     "date": "2022-06-01"
+    }
+   ],
+   "erin@example.com": [
+    {
+     "count": 5,
+     "date": "2022-07-01"
+    },
+    {
+     "count": 2,
+     "date": "2022-08-01"
+    }
+   ],
+   "gary@example.com": [
+    {
+     "count": 6,
+     "date": "2022-01-01"
+    }
+   ]
+  },
+  "gini": 0.3272727272727273,
+  "gini_effort": 0.4222222222222222,
+  "health_trend": [
+   {
+    "active_developers": 4,
+    "bus_factor": 1,
+    "date": "2022-06-21",
+    "gini": 0.282,
+    "health": 48
+   },
+   {
+    "active_developers": 4,
+    "bus_factor": 2,
+    "date": "2022-09-01",
+    "gini": 0.132,
+    "health": 58
+   },
+   {
+    "active_developers": 4,
+    "bus_factor": 1,
+    "date": "2022-11-13",
+    "gini": 0.321,
+    "health": 39
+   },
+   {
+    "active_developers": 2,
+    "bus_factor": 1,
+    "date": "2023-01-24",
+    "gini": 0.167,
+    "health": 48
+   },
+   {
+    "active_developers": 1,
+    "bus_factor": 1,
+    "date": "2023-11-10",
+    "gini": 0.0,
+    "health": 48
+   }
+  ],
+  "hotspot_files": [
+   {
+    "file": "api/core.py",
+    "modifications": 13
+   },
+   {
+    "file": "android/app/src/main/java/com/example/MainActivity.kt",
+    "modifications": 7
+   },
+   {
+    "file": "api/routes.py",
+    "modifications": 6
+   },
+   {
+    "file": "legacy/engine.py",
+    "modifications": 5
+   },
+   {
+    "file": "web/src/components/App.jsx",
+    "modifications": 5
+   },
+   {
+    "file": "web/src/components/Header.jsx",
+    "modifications": 5
+   },
+   {
+    "file": "api/services.py",
+    "modifications": 4
+   },
+   {
+    "file": "api/models.py",
+    "modifications": 4
+   },
+   {
+    "file": "web/src/components/Chart.jsx",
+    "modifications": 3
+   },
+   {
+    "file": "tests/test_feature_1.py",
+    "modifications": 3
+   },
+   {
+    "file": "tests/test_feature_0.py",
+    "modifications": 3
+   },
+   {
+    "file": "legacy/parser.py",
+    "modifications": 2
+   },
+   {
+    "file": "tests/test_feature_2.py",
+    "modifications": 2
+   },
+   {
+    "file": "tests/test_feature_3.py",
+    "modifications": 2
+   },
+   {
+    "file": "api/search.py",
+    "modifications": 1
+   },
+   {
+    "file": "api/entities.py",
+    "modifications": 1
+   }
+  ],
+  "in_degree": [
+   {
+    "file": "api/core.py",
+    "in_degree": 3
+   },
+   {
+    "file": "legacy/engine.py",
+    "in_degree": 1
+   },
+   {
+    "file": "api/search.py",
+    "in_degree": 0
+   },
+   {
+    "file": "api/routes.py",
+    "in_degree": 0
+   },
+   {
+    "file": "api/entities.py",
+    "in_degree": 0
+   }
+  ],
+  "inter_commit": {
+   "alice@example.com": 3.0,
+   "bob@example.com": 3.0,
+   "carol@example.com": 2.0,
+   "dave@example.com": 4.0,
+   "erin@example.com": 4.5,
+   "gary@example.com": 3.0
+  },
+  "kci": [
+   {
+    "file": "legacy/engine.py",
+    "kci": 1.0
+   },
+   {
+    "file": "api/core.py",
+    "kci": 1.0
+   },
+   {
+    "file": "api/routes.py",
+    "kci": 1.0
+   },
+   {
+    "file": "api/entities.py",
+    "kci": 1.0
+   }
+  ],
+  "lorenz": {
+   "x": [
+    0.0,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1.0
+   ],
+   "y": [
+    0.0,
+    0.09090909090909091,
+    0.19696969696969696,
+    0.3484848484848485,
+    0.5454545454545454,
+    1.0
+   ]
+  },
+  "lorenz_effort": {
+   "x": [
+    0.0,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1.0
+   ],
+   "y": [
+    0.0,
+    0.016908212560386472,
+    0.13768115942028986,
+    0.26570048309178745,
+    0.5241545893719807,
+    1.0
+   ]
+  },
+  "orphaned_knowledge": {
+   "inactive_developers": 5,
+   "inactive_months": 12,
+   "orphaned_files": [
+    {
+     "file": "legacy/engine.py",
+     "last_active": "2022-01-16",
+     "lines": 69,
+     "months_inactive": 21.8,
+     "owner": "gary@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "web/src/components/App.jsx",
+     "last_active": "2022-08-16",
+     "lines": 21,
+     "months_inactive": 14.8,
+     "owner": "bob@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "web/src/components/Header.jsx",
+     "last_active": "2022-08-16",
+     "lines": 17,
+     "months_inactive": 14.8,
+     "owner": "bob@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "web/src/components/Chart.jsx",
+     "last_active": "2022-08-16",
+     "lines": 15,
+     "months_inactive": 14.8,
+     "owner": "bob@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "tests/test_feature_0.py",
+     "last_active": "2022-06-05",
+     "lines": 15,
+     "months_inactive": 17.2,
+     "owner": "carol@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "tests/test_feature_1.py",
+     "last_active": "2022-06-05",
+     "lines": 15,
+     "months_inactive": 17.2,
+     "owner": "carol@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "tests/test_feature_2.py",
+     "last_active": "2022-06-05",
+     "lines": 10,
+     "months_inactive": 17.2,
+     "owner": "carol@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "tests/test_feature_3.py",
+     "last_active": "2022-06-05",
+     "lines": 10,
+     "months_inactive": 17.2,
+     "owner": "carol@example.com",
+     "ownership": 1.0
+    },
+    {
+     "file": "android/app/src/main/java/com/example/MainActivity.kt",
+     "last_active": "2022-08-05",
+     "lines": 7,
+     "months_inactive": 15.2,
+     "owner": "erin@example.com",
+     "ownership": 1.0
+    }
+   ],
+   "orphaned_lines": 179,
+   "orphaned_pct": 0.4761,
+   "total_lines": 376
+  },
+  "overview": {
+   "activity": {
+    "active_devs_90d": 1,
+    "commits_per_week_90d": 0.5,
+    "commits_per_week_prior": 0.0,
+    "first_commit_iso": "2022-01-04 09:00:00+00:00",
+    "is_stale": true,
+    "last_commit_days_ago": 1058,
+    "last_commit_iso": "2023-11-10 09:00:00+00:00",
+    "project_age_days": 675,
+    "total_devs": 6,
+    "trend": "up",
+    "trend_pct": 100
+   },
+   "health_dimensions": {
+    "Activity": 25,
+    "Continuity": 0,
+    "Distribution": 75,
+    "Knowledge": 50
+   },
+   "languages": {
+    "mix": [
+     {
+      "name": "Python",
+      "pct": 70
+     },
+     {
+      "name": "JavaScript",
+      "pct": 20
+     },
+     {
+      "name": "Kotlin",
+      "pct": 11
+     }
+    ],
+    "primary": "Python"
+   },
+   "named_findings": [
+    {
+     "detail": "If alice stopped contributing, ~52% of the codebase would have no remaining author.",
+     "kind": "bus_factor",
+     "severity": "high",
+     "title": "Knowledge concentrated in 1 developer"
+    },
+    {
+     "detail": "100% authored by alice on a file other modules depend on. Loss of this contributor would be costly.",
+     "kind": "risk_file",
+     "severity": "high",
+     "title": "api/core.py is the top knowledge hotspot"
+    }
+   ],
+   "verdict": "A established Python project with long-dormant activity, but knowledge is dangerously concentrated in 1 developer."
+  },
+  "ownership_plots": [
+   {
+    "developers": [
+     "alice@example.com"
+    ],
+    "file": "api/core.py",
+    "ownership": [
+     1.0
+    ]
+   },
+   {
+    "developers": [
+     "gary@example.com"
+    ],
+    "file": "legacy/engine.py",
+    "ownership": [
+     1.0
+    ]
+   },
+   {
+    "developers": [
+     "alice@example.com"
+    ],
+    "file": "api/routes.py",
+    "ownership": [
+     1.0
+    ]
+   },
+   {
+    "developers": [
+     "alice@example.com"
+    ],
+    "file": "api/entities.py",
+    "ownership": [
+     1.0
+    ]
+   },
+   {
+    "developers": [
+     "bob@example.com"
+    ],
+    "file": "web/src/components/App.jsx",
+    "ownership": [
+     1.0
+    ]
+   }
+  ],
+  "ownership_table": [
+   {
+    "developer": "gary@example.com",
+    "file": "legacy/engine.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "alice@example.com",
+    "file": "api/core.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "alice@example.com",
+    "file": "api/routes.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "alice@example.com",
+    "file": "api/services.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "bob@example.com",
+    "file": "web/src/components/App.jsx",
+    "ownership": 1.0
+   },
+   {
+    "developer": "bob@example.com",
+    "file": "web/src/components/Chart.jsx",
+    "ownership": 1.0
+   },
+   {
+    "developer": "bob@example.com",
+    "file": "web/src/components/Header.jsx",
+    "ownership": 1.0
+   },
+   {
+    "developer": "carol@example.com",
+    "file": "tests/test_feature_0.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "carol@example.com",
+    "file": "tests/test_feature_1.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "carol@example.com",
+    "file": "tests/test_feature_2.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "carol@example.com",
+    "file": "tests/test_feature_3.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "erin@example.com",
+    "file": "android/app/src/main/java/com/example/MainActivity.kt",
+    "ownership": 1.0
+   },
+   {
+    "developer": "alice@example.com",
+    "file": "api/entities.py",
+    "ownership": 1.0
+   },
+   {
+    "developer": "alice@example.com",
+    "file": "api/search.py",
+    "ownership": 1.0
+   }
+  ],
+  "project_summary": {
+   "dimensions": {
+    "Bus Factor": 0,
+    "Gini Coefficient": 75,
+    "KCI \u00d7 In-Degree": 50
+   },
+   "health_score": 39,
+   "insights": [
+    "Bus factor is critically low (1) \u2014 one person leaving could stall the project.",
+    "Contributions are well distributed (Gini = 0.33).",
+    "Moderate knowledge concentration on critical files (avg = 0.27). Top files: api/core.py, legacy/engine.py, api/entities.py."
+   ],
+   "recommendations": [
+    "Cross-train developers on core modules to raise the bus factor.",
+    "Spread knowledge on high-risk files: api/core.py, legacy/engine.py, api/entities.py."
+   ],
+   "risk_level": "Critical"
+  },
+  "risk_files": [
+   {
+    "file": "api/core.py",
+    "risk_score": 1.0
+   },
+   {
+    "file": "legacy/engine.py",
+    "risk_score": 0.3333333333333333
+   },
+   {
+    "file": "api/entities.py",
+    "risk_score": 0.0
+   },
+   {
+    "file": "api/routes.py",
+    "risk_score": 0.0
+   },
+   {
+    "file": "api/search.py",
+    "risk_score": 0.0
+   }
+  ],
+  "summary": {
+   "date_range": {
+    "end": "2023-11-10 09:00:00+00:00",
+    "start": "2022-01-04 09:00:00+00:00"
+   },
+   "merged_aliases": 1,
+   "total_commits": 78,
+   "total_developers": 6,
+   "total_files": 16,
+   "total_modifications": 66
+  },
+  "timeline": [
+   {
+    "count": 6,
+    "date": "2022-01-31 00:00:00+00:00"
+   },
+   {
+    "count": 11,
+    "date": "2022-02-28 00:00:00+00:00"
+   },
+   {
+    "count": 10,
+    "date": "2022-03-31 00:00:00+00:00"
+   },
+   {
+    "count": 7,
+    "date": "2022-04-30 00:00:00+00:00"
+   },
+   {
+    "count": 13,
+    "date": "2022-05-31 00:00:00+00:00"
+   },
+   {
+    "count": 2,
+    "date": "2022-06-30 00:00:00+00:00"
+   },
+   {
+    "count": 5,
+    "date": "2022-07-31 00:00:00+00:00"
+   },
+   {
+    "count": 6,
+    "date": "2022-08-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2022-09-30 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2022-10-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2022-11-30 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2022-12-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-01-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-02-28 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-03-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-04-30 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-05-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-06-30 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-07-31 00:00:00+00:00"
+   },
+   {
+    "count": 0,
+    "date": "2023-08-31 00:00:00+00:00"
+   },
+   {
+    "count": 1,
+    "date": "2023-09-30 00:00:00+00:00"
+   },
+   {
+    "count": 4,
+    "date": "2023-10-31 00:00:00+00:00"
+   },
+   {
+    "count": 1,
+    "date": "2023-11-30 00:00:00+00:00"
+   }
+  ],
+  "top_developers": [
+   {
+    "commits": 30,
+    "developer": "alice@example.com"
+   },
+   {
+    "commits": 16,
+    "developer": "bob@example.com"
+   },
+   {
+    "commits": 10,
+    "developer": "carol@example.com"
+   },
+   {
+    "commits": 10,
+    "developer": "dave@example.com"
+   },
+   {
+    "commits": 7,
+    "developer": "erin@example.com"
+   },
+   {
+    "commits": 5,
+    "developer": "gary@example.com"
+   }
+  ],
+  "top_devs_mods": [
+   {
+    "developer": "alice@example.com",
+    "modifications": 30
+   },
+   {
+    "developer": "bob@example.com",
+    "modifications": 13
+   },
+   {
+    "developer": "carol@example.com",
+    "modifications": 10
+   },
+   {
+    "developer": "erin@example.com",
+    "modifications": 7
+   },
+   {
+    "developer": "gary@example.com",
+    "modifications": 6
+   }
+  ],
+  "voronoi": {
+   "edges": [],
+   "nodes": [
+    {
+     "bus_factor": 1,
+     "id": "api/core.py",
+     "kci": 1.0,
+     "label": "core.py",
+     "path": "api/core.py",
+     "value": 13,
+     "x": 0.05,
+     "y": 0.05
+    }
+   ]
+  }
+ },
+ "skills": {
+  "cluster_dominant": {
+   "0": "Frontend",
+   "1": "Tester",
+   "2": "Backend",
+   "3": "DevOps"
+  },
+  "cluster_profiles": [
+   {
+    "centroid": {
+     "kw_backend": 0.0,
+     "kw_devops": 0.0,
+     "kw_docs": 0.0,
+     "kw_frontend": 0.938,
+     "kw_test": 0.0,
+     "pct_backend": 0.0,
+     "pct_build": 0.0,
+     "pct_devops": 0.0,
+     "pct_docs": 0.0,
+     "pct_frontend": 1.0,
+     "pct_mobile": 0.0,
+     "pct_test": 0.0
+    },
+    "cluster": 0,
+    "label": "frontend + frontend (msgs)",
+    "size": 1
+   },
+   {
+    "centroid": {
+     "kw_backend": 0.0,
+     "kw_devops": 0.0,
+     "kw_docs": 0.0,
+     "kw_frontend": 0.0,
+     "kw_test": 0.0,
+     "pct_backend": 0.0,
+     "pct_build": 0.0,
+     "pct_devops": 0.0,
+     "pct_docs": 0.0,
+     "pct_frontend": 0.0,
+     "pct_mobile": 0.5,
+     "pct_test": 0.5
+    },
+    "cluster": 1,
+    "label": "mobile + testing",
+    "size": 2
+   },
+   {
+    "centroid": {
+     "kw_backend": 0.433,
+     "kw_devops": 0.0,
+     "kw_docs": 0.0,
+     "kw_frontend": 0.0,
+     "kw_test": 0.0,
+     "pct_backend": 0.793,
+     "pct_build": 0.0,
+     "pct_devops": 0.0,
+     "pct_docs": 0.143,
+     "pct_frontend": 0.065,
+     "pct_mobile": 0.0,
+     "pct_test": 0.0
+    },
+    "cluster": 2,
+    "label": "backend + backend (msgs)",
+    "size": 2
+   },
+   {
+    "centroid": {
+     "kw_backend": 0.0,
+     "kw_devops": 0.2,
+     "kw_docs": 0.0,
+     "kw_frontend": 0.0,
+     "kw_test": 0.0,
+     "pct_backend": 0.0,
+     "pct_build": 0.0,
+     "pct_devops": 1.0,
+     "pct_docs": 0.0,
+     "pct_frontend": 0.0,
+     "pct_mobile": 0.0,
+     "pct_test": 0.0
+    },
+    "cluster": 3,
+    "label": "devops + devops (msgs)",
+    "size": 1
+   }
+  ],
+  "developers": [
+   {
+    "cluster": 2,
+    "developer": "gary@example.com",
+    "first_commit": "2022-01-04",
+    "kw_backend": 0.0,
+    "kw_devops": 0.0,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.0,
+    "kw_test": 0.0,
+    "last_commit": "2022-01-16",
+    "pca_x": 0.7675,
+    "pca_y": -0.0124,
+    "pct_backend": 0.7,
+    "pct_build": 0.0,
+    "pct_devops": 0.0,
+    "pct_docs": 0.2,
+    "pct_frontend": 0.1,
+    "pct_mobile": 0.0,
+    "pct_test": 0.0,
+    "role": "Backend",
+    "role_original": "Backend",
+    "top_keywords": [
+     "extend",
+     "legacy",
+     "engine",
+     "initial",
+     "import"
+    ],
+    "total_commits": 5,
+    "total_lines": 116,
+    "umap_x": 18.5589,
+    "umap_y": -0.8377
+   },
+   {
+    "cluster": 2,
+    "developer": "alice@example.com",
+    "first_commit": "2022-02-05",
+    "kw_backend": 0.867,
+    "kw_devops": 0.0,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.0,
+    "kw_test": 0.0,
+    "last_commit": "2023-11-10",
+    "pca_x": 1.0436,
+    "pca_y": -0.0907,
+    "pct_backend": 0.886,
+    "pct_build": 0.0,
+    "pct_devops": 0.0,
+    "pct_docs": 0.086,
+    "pct_frontend": 0.029,
+    "pct_mobile": 0.0,
+    "pct_test": 0.0,
+    "role": "Backend",
+    "role_original": "Backend",
+    "top_keywords": [
+     "backend",
+     "feature",
+     "recent",
+     "work",
+     "add",
+     "api",
+     "skeleton",
+     "schema"
+    ],
+    "total_commits": 30,
+    "total_lines": 200,
+    "umap_x": 18.7871,
+    "umap_y": -1.46
+   },
+   {
+    "cluster": 0,
+    "developer": "bob@example.com",
+    "first_commit": "2022-04-02",
+    "kw_backend": 0.0,
+    "kw_devops": 0.0,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.938,
+    "kw_test": 0.0,
+    "last_commit": "2022-08-16",
+    "pca_x": -0.5444,
+    "pca_y": 1.0459,
+    "pct_backend": 0.0,
+    "pct_build": 0.0,
+    "pct_devops": 0.0,
+    "pct_docs": 0.0,
+    "pct_frontend": 1.0,
+    "pct_mobile": 0.0,
+    "pct_test": 0.0,
+    "role": "Frontend",
+    "role_original": "Frontend",
+    "top_keywords": [
+     "tweak",
+     "frontend",
+     "skeleton",
+     "search",
+     "box"
+    ],
+    "total_commits": 16,
+    "total_lines": 64,
+    "umap_x": 18.6055,
+    "umap_y": 0.255
+   },
+   {
+    "cluster": 1,
+    "developer": "carol@example.com",
+    "first_commit": "2022-05-14",
+    "kw_backend": 0.0,
+    "kw_devops": 0.0,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.0,
+    "kw_test": 0.0,
+    "last_commit": "2022-06-05",
+    "pca_x": -0.277,
+    "pca_y": 0.0018,
+    "pct_backend": 0.0,
+    "pct_build": 0.0,
+    "pct_devops": 0.0,
+    "pct_docs": 0.0,
+    "pct_frontend": 0.0,
+    "pct_mobile": 0.0,
+    "pct_test": 1.0,
+    "role": "Tester",
+    "role_original": "Tester",
+    "top_keywords": [
+     "tests",
+     "batch"
+    ],
+    "total_commits": 10,
+    "total_lines": 50,
+    "umap_x": 19.4252,
+    "umap_y": 0.1081
+   },
+   {
+    "cluster": 3,
+    "developer": "dave@example.com",
+    "first_commit": "2022-06-07",
+    "kw_backend": 0.0,
+    "kw_devops": 0.2,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.0,
+    "kw_test": 0.0,
+    "last_commit": "2022-08-10",
+    "pca_x": -0.7127,
+    "pca_y": -0.9465,
+    "pct_backend": 0.0,
+    "pct_build": 0.0,
+    "pct_devops": 1.0,
+    "pct_docs": 0.0,
+    "pct_frontend": 0.0,
+    "pct_mobile": 0.0,
+    "pct_test": 0.0,
+    "role": "DevOps",
+    "role_original": "DevOps",
+    "top_keywords": [
+     "ops",
+     "change",
+     "container",
+     "release",
+     "script",
+     "executable"
+    ],
+    "total_commits": 10,
+    "total_lines": 15,
+    "umap_x": 20.2743,
+    "umap_y": -0.145
+   },
+   {
+    "cluster": 1,
+    "developer": "erin@example.com",
+    "first_commit": "2022-07-11",
+    "kw_backend": 0.0,
+    "kw_devops": 0.0,
+    "kw_docs": 0.0,
+    "kw_frontend": 0.0,
+    "kw_test": 0.0,
+    "last_commit": "2022-08-05",
+    "pca_x": -0.277,
+    "pca_y": 0.0018,
+    "pct_backend": 0.0,
+    "pct_build": 0.0,
+    "pct_devops": 0.0,
+    "pct_docs": 0.0,
+    "pct_frontend": 0.0,
+    "pct_mobile": 1.0,
+    "pct_test": 0.0,
+    "role": "Mobile",
+    "role_original": "Mobile",
+    "top_keywords": [
+     "mobile",
+     "screen",
+     "android",
+     "app"
+    ],
+    "total_commits": 7,
+    "total_lines": 8,
+    "umap_x": 19.7496,
+    "umap_y": -0.8888
+   }
+  ],
+  "role_distribution": {
+   "Backend": 2,
+   "DevOps": 1,
+   "Frontend": 1,
+   "Mobile": 1,
+   "Tester": 1
+  },
+  "total_analyzed": 6
+ },
+ "timeline": {
+  "activity": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.646290+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.646290+00:00"
+   },
+   "current": {
+    "points": [
+     {
+      "count": 6,
+      "date": "2022-01-31 00:00:00+00:00"
+     },
+     {
+      "count": 11,
+      "date": "2022-02-28 00:00:00+00:00"
+     },
+     {
+      "count": 10,
+      "date": "2022-03-31 00:00:00+00:00"
+     },
+     {
+      "count": 7,
+      "date": "2022-04-30 00:00:00+00:00"
+     },
+     {
+      "count": 13,
+      "date": "2022-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 2,
+      "date": "2022-06-30 00:00:00+00:00"
+     },
+     {
+      "count": 5,
+      "date": "2022-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 6,
+      "date": "2022-08-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-09-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-10-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-11-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2022-12-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-01-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-02-28 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-03-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-04-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-05-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-06-30 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-07-31 00:00:00+00:00"
+     },
+     {
+      "count": 0,
+      "date": "2023-08-31 00:00:00+00:00"
+     },
+     {
+      "count": 1,
+      "date": "2023-09-30 00:00:00+00:00"
+     },
+     {
+      "count": 4,
+      "date": "2023-10-31 00:00:00+00:00"
+     },
+     {
+      "count": 1,
+      "date": "2023-11-30 00:00:00+00:00"
+     }
+    ],
+    "totals": {
+     "total_modifications": 66
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "current": 66,
+     "pct": null,
+     "previous": 0
+    }
+   },
+   "metric": "activity",
+   "previous": {
+    "points": [],
+    "totals": {
+     "total_modifications": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "bus_factor": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.647693+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.647693+00:00"
+   },
+   "current": {
+    "approx": true,
+    "bus_factor": 1,
+    "developers": [
+     {
+      "name": "alice@example.com",
+      "ownership": 0.5199115044247787
+     },
+     {
+      "name": "gary@example.com",
+      "ownership": 0.23672566371681417
+     },
+     {
+      "name": "bob@example.com",
+      "ownership": 0.1172566371681416
+     },
+     {
+      "name": "carol@example.com",
+      "ownership": 0.11061946902654868
+     },
+     {
+      "name": "erin@example.com",
+      "ownership": 0.015486725663716814
+     }
+    ],
+    "simulation": [
+     {
+      "knowledge_lost": 0.5199115044247787,
+      "removed": 1
+     },
+     {
+      "knowledge_lost": 0.7566371681415929,
+      "removed": 2
+     },
+     {
+      "knowledge_lost": 0.8738938053097345,
+      "removed": 3
+     },
+     {
+      "knowledge_lost": 0.9845132743362832,
+      "removed": 4
+     },
+     {
+      "knowledge_lost": 1.0,
+      "removed": 5
+     }
+    ]
+   },
+   "delta": {
+    "aggregate": {
+     "abs_diff": 1,
+     "current": 1,
+     "pct": null,
+     "previous": 0
+    }
+   },
+   "metric": "bus_factor",
+   "previous": {
+    "approx": true,
+    "bus_factor": 0,
+    "developers": [],
+    "simulation": []
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "commit_frequency": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.656006+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.656006+00:00"
+   },
+   "current": {
+    "series": [
+     {
+      "developer": "alice@example.com",
+      "points": [
+       {
+        "count": 11,
+        "date": "2022-02-28 00:00:00+00:00"
+       },
+       {
+        "count": 10,
+        "date": "2022-03-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-04-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-05-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-06-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-07-31 00:00:00+00:00"
+       },
+       {
+        "count": 3,
+        "date": "2022-08-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-09-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-10-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-11-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-12-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-01-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-02-28 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-03-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-04-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-05-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-06-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-07-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2023-08-31 00:00:00+00:00"
+       },
+       {
+        "count": 1,
+        "date": "2023-09-30 00:00:00+00:00"
+       },
+       {
+        "count": 4,
+        "date": "2023-10-31 00:00:00+00:00"
+       },
+       {
+        "count": 1,
+        "date": "2023-11-30 00:00:00+00:00"
+       }
+      ]
+     },
+     {
+      "developer": "bob@example.com",
+      "points": [
+       {
+        "count": 7,
+        "date": "2022-04-30 00:00:00+00:00"
+       },
+       {
+        "count": 5,
+        "date": "2022-05-31 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-06-30 00:00:00+00:00"
+       },
+       {
+        "count": 0,
+        "date": "2022-07-31 00:00:00+00:00"
+       },
+       {
+        "count": 1,
+        "date": "2022-08-31 00:00:00+00:00"
+       }
+      ]
+     },
+     {
+      "developer": "carol@example.com",
+      "points": [
+       {
+        "count": 8,
+        "date": "2022-05-31 00:00:00+00:00"
+       },
+       {
+        "count": 2,
+        "date": "2022-06-30 00:00:00+00:00"
+       }
+      ]
+     },
+     {
+      "developer": "erin@example.com",
+      "points": [
+       {
+        "count": 5,
+        "date": "2022-07-31 00:00:00+00:00"
+       },
+       {
+        "count": 2,
+        "date": "2022-08-31 00:00:00+00:00"
+       }
+      ]
+     },
+     {
+      "developer": "gary@example.com",
+      "points": [
+       {
+        "count": 6,
+        "date": "2022-01-31 00:00:00+00:00"
+       }
+      ]
+     }
+    ],
+    "totals": {
+     "developers": 5
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "current": 5,
+     "pct": null,
+     "previous": 0
+    }
+   },
+   "metric": "commit_frequency",
+   "previous": {
+    "series": [],
+    "totals": {
+     "developers": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "gini_lorenz": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.657233+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.657233+00:00"
+   },
+   "current": {
+    "gini": 0.3272727272727273,
+    "lorenz": {
+     "x": [
+      0.0,
+      0.2,
+      0.4,
+      0.6,
+      0.8,
+      1.0
+     ],
+     "y": [
+      0.0,
+      0.09090909090909091,
+      0.19696969696969696,
+      0.3484848484848485,
+      0.5454545454545454,
+      1.0
+     ]
+    },
+    "totals": {
+     "developers": 5
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "abs_diff": 0.3272727272727273,
+     "current": 0.3272727272727273,
+     "pct": null,
+     "previous": 0.0
+    }
+   },
+   "metric": "gini_lorenz",
+   "previous": {
+    "gini": 0.0,
+    "lorenz": {
+     "x": [
+      0,
+      1
+     ],
+     "y": [
+      0,
+      1
+     ]
+    },
+    "totals": {
+     "developers": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "hotspots": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.658814+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.658814+00:00"
+   },
+   "current": {
+    "items": [
+     {
+      "file": "api/core.py",
+      "modifications": 13
+     },
+     {
+      "file": "android/app/src/main/java/com/example/MainActivity.kt",
+      "modifications": 7
+     },
+     {
+      "file": "api/routes.py",
+      "modifications": 6
+     },
+     {
+      "file": "legacy/engine.py",
+      "modifications": 5
+     },
+     {
+      "file": "web/src/components/App.jsx",
+      "modifications": 5
+     },
+     {
+      "file": "web/src/components/Header.jsx",
+      "modifications": 5
+     },
+     {
+      "file": "api/services.py",
+      "modifications": 4
+     },
+     {
+      "file": "api/models.py",
+      "modifications": 4
+     },
+     {
+      "file": "web/src/components/Chart.jsx",
+      "modifications": 3
+     },
+     {
+      "file": "tests/test_feature_1.py",
+      "modifications": 3
+     }
+    ],
+    "totals": {
+     "total_commits": 78,
+     "total_developers": 6,
+     "total_files": 16,
+     "total_modifications": 66
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "current": 66,
+     "pct": null,
+     "previous": 0
+    },
+    "per_item": [
+     {
+      "current": 13,
+      "key": "api/core.py",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 7,
+      "key": "android/app/src/main/java/com/example/MainActivity.kt",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 6,
+      "key": "api/routes.py",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 5,
+      "key": "legacy/engine.py",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 5,
+      "key": "web/src/components/App.jsx",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 5,
+      "key": "web/src/components/Header.jsx",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 4,
+      "key": "api/services.py",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 4,
+      "key": "api/models.py",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 3,
+      "key": "web/src/components/Chart.jsx",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 3,
+      "key": "tests/test_feature_1.py",
+      "pct": null,
+      "previous": null
+     }
+    ]
+   },
+   "metric": "hotspots",
+   "previous": {
+    "items": [],
+    "totals": {
+     "total_commits": 0,
+     "total_developers": 0,
+     "total_files": 0,
+     "total_modifications": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "new_returning": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.660294+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.660294+00:00"
+   },
+   "current": {
+    "new": 0,
+    "returning": 0,
+    "totals": {
+     "developers": 0
+    }
+   },
+   "delta": {
+    "new": {
+     "current": 0,
+     "pct": null,
+     "previous": 0
+    },
+    "returning": {
+     "current": 0,
+     "pct": null,
+     "previous": 0
+    }
+   },
+   "metric": "new_returning",
+   "previous": {
+    "new": 0,
+    "returning": 0,
+    "totals": {
+     "developers": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "top_developers": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.662461+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.662461+00:00"
+   },
+   "current": {
+    "items": [
+     {
+      "commits": 30,
+      "developer": "alice@example.com"
+     },
+     {
+      "commits": 16,
+      "developer": "bob@example.com"
+     },
+     {
+      "commits": 10,
+      "developer": "carol@example.com"
+     },
+     {
+      "commits": 10,
+      "developer": "dave@example.com"
+     },
+     {
+      "commits": 7,
+      "developer": "erin@example.com"
+     },
+     {
+      "commits": 5,
+      "developer": "gary@example.com"
+     }
+    ],
+    "totals": {
+     "total_commits": 78,
+     "total_developers": 6,
+     "total_files": 16,
+     "total_modifications": 66
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "current": 66,
+     "pct": null,
+     "previous": 0
+    },
+    "per_item": [
+     {
+      "current": 30,
+      "key": "alice@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 16,
+      "key": "bob@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 10,
+      "key": "carol@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 10,
+      "key": "dave@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 7,
+      "key": "erin@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 5,
+      "key": "gary@example.com",
+      "pct": null,
+      "previous": null
+     }
+    ]
+   },
+   "metric": "top_developers",
+   "previous": {
+    "items": [],
+    "totals": {
+     "total_commits": 0,
+     "total_developers": 0,
+     "total_files": 0,
+     "total_modifications": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "top_devs_mods": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.664906+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.664906+00:00"
+   },
+   "current": {
+    "items": [
+     {
+      "developer": "alice@example.com",
+      "modifications": 30
+     },
+     {
+      "developer": "bob@example.com",
+      "modifications": 13
+     },
+     {
+      "developer": "carol@example.com",
+      "modifications": 10
+     },
+     {
+      "developer": "erin@example.com",
+      "modifications": 7
+     },
+     {
+      "developer": "gary@example.com",
+      "modifications": 6
+     }
+    ],
+    "totals": {
+     "total_commits": 78,
+     "total_developers": 6,
+     "total_files": 16,
+     "total_modifications": 66
+    }
+   },
+   "delta": {
+    "aggregate": {
+     "current": 66,
+     "pct": null,
+     "previous": 0
+    },
+    "per_item": [
+     {
+      "current": 30,
+      "key": "alice@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 13,
+      "key": "bob@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 10,
+      "key": "carol@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 7,
+      "key": "erin@example.com",
+      "pct": null,
+      "previous": null
+     },
+     {
+      "current": 6,
+      "key": "gary@example.com",
+      "pct": null,
+      "previous": null
+     }
+    ]
+   },
+   "metric": "top_devs_mods",
+   "previous": {
+    "items": [],
+    "totals": {
+     "total_commits": 0,
+     "total_developers": 0,
+     "total_files": 0,
+     "total_modifications": 0
+    }
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  },
+  "voronoi": {
+   "compare_window": {
+    "end": "2026-10-03T21:17:46.675051+00:00",
+    "label": "previous period",
+    "mode": "previous",
+    "start": "2026-09-03T21:17:46.675051+00:00"
+   },
+   "current": {
+    "edges": [],
+    "nodes": [
+     {
+      "bus_factor": 1,
+      "id": "api/core.py",
+      "kci": 1.0,
+      "label": "core.py",
+      "path": "api/core.py",
+      "value": 13,
+      "x": 0.05,
+      "y": 0.05
+     }
+    ]
+   },
+   "delta": {
+    "aggregate": {
+     "current": 13,
+     "pct": null,
+     "previous": 0
+    }
+   },
+   "metric": "voronoi",
+   "previous": {
+    "edges": [],
+    "nodes": []
+   },
+   "warning": null,
+   "window": {
+    "end": null,
+    "start": null
+   }
+  }
+ }
+}
