@@ -1,9 +1,10 @@
+import gzip
 import logging
 import os
 import threading
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -53,6 +54,33 @@ app.register_blueprint(auth_bp)
 # not pay ~tens of seconds of compilation. Threaded so gunicorn can bind the
 # port immediately and Render's health check still passes right away.
 threading.Thread(target=warm_up_umap, daemon=True).start()
+
+
+@app.after_request
+def _gzip_json(resp):
+    """Gzip JSON bodies for browsers that accept it.
+
+    A finished analysis is hundreds of KB of JSON (MBs on big repos), and the
+    dashboard downloads it on every visit. Compressing it is the single
+    biggest network saving for the website. The local bridge sends no
+    Accept-Encoding, so desktop / VS Code traffic is untouched.
+    """
+    try:
+        if (resp.status_code != 200 or resp.direct_passthrough
+                or resp.mimetype != 'application/json'
+                or 'Content-Encoding' in resp.headers
+                or 'gzip' not in (request.headers.get('Accept-Encoding') or '').lower()):
+            return resp
+        data = resp.get_data()
+        if len(data) < 1024:
+            return resp
+        resp.set_data(gzip.compress(data, compresslevel=5))
+        resp.headers['Content-Encoding'] = 'gzip'
+        resp.headers['Content-Length'] = str(len(resp.get_data()))
+        resp.vary.add('Accept-Encoding')
+    except Exception:
+        logging.getLogger(__name__).exception('gzip failed; sending uncompressed')
+    return resp
 
 
 @app.errorhandler(429)

@@ -18,6 +18,8 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
+      - key: GA_BLAME_WORKERS     # parallel `git blame`; 2 keeps the free
+        value: "2"                # tier well under its 512 MB ceiling
       - key: FLASK_SECRET_KEY
         generateValue: true      # Render generates a strong value; never commit one
       - key: CORS_ORIGINS

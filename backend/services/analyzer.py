@@ -94,18 +94,34 @@ def _build_clone_url(repo_url: str, token: str, provider: str) -> str:
     return repo_url.replace('https://', f'https://{userinfo}@', 1)
 
 
-def _run_analysis(repo_url: str, token: str = None, provider: str = None):
+def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_path: str = None):
+    """Clone, mine and compute everything for one repository.
+
+    `local_path` (desktop app / VS Code extension only) clones a repository
+    from disk instead of a Git host. The clone is the same shallow,
+    single-branch clone the website makes, so a local analysis runs the
+    identical pipeline on the committed state of the checked-out branch:
+    untracked folders (node_modules, virtualenvs) and uncommitted edits in
+    the user's working copy never leak into the results.
+    """
     global _LAST_REPO_URL
     tmp_dir = tempfile.mkdtemp()
     try:
         _ANALYSIS_STATUS[repo_url] = 'running'
 
         _ANALYSIS_PHASE[repo_url] = 'cloning'
-        clone_url = _build_clone_url(repo_url, token, provider)
+        if local_path:
+            # --no-local makes git honour --depth for an on-disk source.
+            clone_cmd = ["git", "clone", "--no-local", f"--depth={CLONE_DEPTH}", "--single-branch",
+                         local_path, tmp_dir]
+        else:
+            clone_cmd = ["git", "clone", f"--depth={CLONE_DEPTH}", "--single-branch",
+                         _build_clone_url(repo_url, token, provider), tmp_dir]
         result = subprocess.run(
-            ["git", "clone", f"--depth={CLONE_DEPTH}", "--single-branch", clone_url, tmp_dir],
+            clone_cmd,
             capture_output=True,
             text=True,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
         if result.returncode != 0:
             stderr = result.stderr.strip()
@@ -205,7 +221,8 @@ def _prime_skill_cache(repo_url, commits_data, file_modifications):
         logger.exception("Failed to prime skill cache for %s", repo_url)
 
 
-def start_analysis(repo_url: str, force: bool = False, token: str = None, provider: str = None):
+def start_analysis(repo_url: str, force: bool = False, token: str = None, provider: str = None,
+                   local_path: str = None):
     _evict_stale_entries()
 
     status = _ANALYSIS_STATUS.get(repo_url)
@@ -233,7 +250,8 @@ def start_analysis(repo_url: str, force: bool = False, token: str = None, provid
         return {'status': 'done', 'analyzed_at': _ANALYSIS_TIMESTAMPS.get(repo_url)}
 
     if status != 'running':
-        thread = threading.Thread(target=_run_analysis, args=(repo_url, token, provider), daemon=True)
+        thread = threading.Thread(target=_run_analysis, args=(repo_url, token, provider, local_path),
+                                  daemon=True)
         thread.start()
 
     return {'status': _ANALYSIS_STATUS.get(repo_url, 'running')}
@@ -299,6 +317,17 @@ def extract_data(repo_path: str):
             only_commits = [h.strip() for h in hash_out.stdout.strip().splitlines() if h.strip()]
     except Exception:
         pass
+
+    # Fast path: two streamed `git log` calls instead of one diff subprocess
+    # per commit. Output is identical to the PyDriller loop below (verified
+    # record-for-record on real repos); any surprise falls back to PyDriller.
+    # GA_EXTRACTOR=pydriller forces the original path.
+    if os.environ.get("GA_EXTRACTOR", "git") != "pydriller":
+        try:
+            from services.git_extract import extract_with_git
+            return extract_with_git(repo_path, only_commits)
+        except Exception:
+            logger.warning("fast git extraction failed, falling back to PyDriller", exc_info=True)
 
     repo_iter = Repository(repo_path, only_commits=only_commits) if only_commits else Repository(repo_path)
 
