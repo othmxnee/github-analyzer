@@ -23,6 +23,8 @@ import KnowledgeRiskCards from '../components/Charts/KnowledgeRiskCards'
 import OrphanedFilesTable from '../components/Charts/OrphanedFilesTable'
 import BusFactorTrendChart from '../components/Charts/BusFactorTrendChart'
 import TimelineCard from '../components/TimelineCard'
+import WatchButton from '../components/WatchButton'
+import RepoHistory from '../components/RepoHistory'
 
 /* Charts built on heavy libraries (d3, react-force-graph, recharts) load on
    demand, so opening the dashboard only downloads what the first tab needs. */
@@ -512,6 +514,7 @@ export default function Dashboard() {
         gini={gini}
         busFactor={bus_factor}
       />
+      {!isEmbedded && !isLocalKey(repoUrl) && repoUrl && <RepoHistory repoUrl={repoUrl} Card={ChartCard} />}
     </div>
   )
 
@@ -965,6 +968,7 @@ export default function Dashboard() {
               View on GitHub
             </a>
           )}
+          {!isEmbedded && !isLocalKey(repoUrl) && repoUrl && <WatchButton repoUrl={repoUrl} />}
           <button
             className="dash-reanalyze-btn"
             onClick={() => {

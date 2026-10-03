@@ -287,12 +287,34 @@ def ensure_loaded(repo_url):
     _hydrate(repo_url)
 
 
+def _forget_in_memory(repo_url):
+    for d in (_ANALYSIS_CACHE, _ANALYSIS_STATUS, _ANALYSIS_PHASE, _ANALYSIS_TIMESTAMPS,
+              _CLEANED_CACHE, _RUN_IDS):
+        d.pop(repo_url, None)
+    from services import skill_service, timeline_service
+    skill_service.invalidate_for_repo(repo_url)
+    timeline_service.invalidate_for_repo(repo_url)
+
+
+def _refresh_if_newer(repo_url):
+    """If another process (the nightly job, another web worker) stored a newer
+    finished analysis than the one held in memory, switch to it."""
+    if _ANALYSIS_STATUS.get(repo_url) != 'done' or not store.enabled():
+        return False
+    latest = store.latest_state(repo_url)
+    if not latest or latest["status"] != "done" or latest["id"] == _RUN_IDS.get(repo_url):
+        return False
+    _forget_in_memory(repo_url)
+    return _hydrate(repo_url)
+
+
 def start_analysis(repo_url: str, force: bool = False, token: str = None, provider: str = None,
                    local_path: str = None, trigger: str = "manual", private: bool = None):
     _evict_stale_entries()
     if private is not None:
         _REPO_PRIVATE[repo_url] = bool(private)
-    _hydrate(repo_url)
+    if not _hydrate(repo_url) and not force:
+        _refresh_if_newer(repo_url)
 
     status = _ANALYSIS_STATUS.get(repo_url)
 

@@ -10,6 +10,7 @@ import RepoPicker from '../components/RepoPicker'
 const SUPPORTED_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org']
 const isSupportedRepoUrl = url => SUPPORTED_HOSTS.some(h => url.includes(h))
 import '../styles/Home.css'
+import '../styles/Watch.css'
 
 /* ═════════════════════════════════════════
    PARTICLE CANVAS — mouse-reactive
@@ -263,6 +264,28 @@ export default function Home() {
 
   const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior:'smooth' })
 
+  /* ── links from alert emails: ?repo=<url> opens that repository's dashboard,
+     ?watch=confirmed|unsubscribed|invalid reports the result of an email link ── */
+  const [notice, setNotice] = useState(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const watch = params.get('watch')
+    const repo = params.get('repo')
+    if (watch) {
+      setNotice({
+        confirmed: { text: 'Alerts confirmed. You will hear from us when this repository gets riskier.' },
+        unsubscribed: { text: 'You will no longer get alerts for that repository.' },
+        invalid: { text: 'That link is no longer valid.', warn: true },
+      }[watch] || null)
+    }
+    if (watch || repo) window.history.replaceState({}, '', '/')
+    if (repo && isSupportedRepoUrl(repo)) {
+      setRepoUrl(repo)
+      handleSubmit(null, repo)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /* ── auto-submit when coming back from Dashboard "Re-analyze" ── */
   useEffect(() => {
     const state = location.state
@@ -402,6 +425,7 @@ export default function Home() {
                   </button>
                 </div>
                 {error && <div className="hp-err">{error}</div>}
+                {notice && <div className={`hp-notice${notice.warn ? ' warn' : ''}`}>{notice.text}</div>}
               </form>
             )}
 

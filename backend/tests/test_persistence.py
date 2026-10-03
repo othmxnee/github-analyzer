@@ -22,7 +22,7 @@ def database(tmp_path):
     db.configure(url)
     if db.engine().dialect.name == "postgresql":
         with db.engine().begin() as c:
-            c.execute(text("DROP TABLE IF EXISTS analysis_runs, repositories, alembic_version CASCADE"))
+            c.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public"))   # fresh test database
     db.upgrade()
     forget(URL)
     yield db
@@ -190,3 +190,17 @@ def test_migrations_match_the_models(database):
     with db.engine().connect() as conn:
         diffs = compare_metadata(MigrationContext.configure(conn), db.Base.metadata)
     assert diffs == []
+
+
+def test_newer_run_from_another_process_is_picked_up(database, sample_repo):
+    first = analyze(URL, sample_repo)
+    # Another process (e.g. the nightly job) stores a newer analysis.
+    newer = dict(first, bus_factor=first["bus_factor"] + 7)
+    newer.pop("status", None)
+    run_id = store.run_started(URL, trigger="scheduled")
+    store.run_finished(run_id, newer, head_sha="f" * 40,
+                       cleaned={"cleaned": analyzer._CLEANED_CACHE[URL], "prebuilt": None})
+    assert analyzer.get_analysis_result(URL)["bus_factor"] == first["bus_factor"]   # memory as before
+    assert analyzer.start_analysis(URL, local_path=sample_repo)["status"] == "done"
+    assert analyzer.get_analysis_result(URL)["bus_factor"] == first["bus_factor"] + 7
+    assert analyzer.current_run_id(URL) == run_id

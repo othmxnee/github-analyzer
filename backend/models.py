@@ -67,3 +67,41 @@ class AnalysisRun(Base):
     cleaned_gz: Mapped[bytes | None] = mapped_column(LargeBinary)
 
     repository: Mapped[Repository] = relationship(back_populates="runs")
+
+
+class Watch(Base):
+    """Someone asked to be told when a repository's knowledge risk changes."""
+    __tablename__ = "watches"
+    __table_args__ = (Index("ix_watches_owner", "provider", "login"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)   # who created it (signed in)
+    login: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320))
+    email_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    slack_webhook_url: Mapped[str | None] = mapped_column(String(500))
+    # sha256 of the secret in confirm / unsubscribe links (the secret is never stored)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    repository: Mapped[Repository] = relationship()
+
+
+class Alert(Base):
+    """A change between two consecutive analyses that a watcher should know about."""
+    __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alerts_repo_created", "repository_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"),
+                                               nullable=False)
+    run_id: Mapped[int] = mapped_column(ForeignKey("analysis_runs.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(8), nullable=False)     # high | medium
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
