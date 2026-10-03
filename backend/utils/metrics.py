@@ -6,6 +6,12 @@ import ast
 import re
 from pathlib import Path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+import os
+
+# Parallel `git blame` processes for KCI. Override with GA_BLAME_WORKERS
+# (e.g. 1 on a single-CPU host).
+_BLAME_WORKERS = int(os.environ.get("GA_BLAME_WORKERS", min(8, (os.cpu_count() or 2))))
 
 
 def compute_gini(values):
@@ -56,12 +62,38 @@ def normalize_path(path: str) -> str:
     return p
 
 
+def _blame_author_lines(repo_root, abs_path):
+    """Per-author line counts for one file, or None if blame fails."""
+    try:
+        output = subprocess.check_output(
+            ["git", "-C", str(repo_root), "blame", "--line-porcelain", str(abs_path)],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        return None
+    dev_lines = defaultdict(int)
+    author = None
+    for line in output.splitlines():
+        if line.startswith("author "):
+            author = line.replace("author ", "").strip()
+        elif line.startswith("\t"):
+            if author:
+                dev_lines[author] += 1
+    return dev_lines
+
+
 def compute_kci(df_files, repo_root):
     file_ids = df_files["file_id"].dropna().unique().tolist()
 
     line_counts = {}
     ownership_results = {}
 
+    # Resolve paths first (cheap, sequential), then blame in parallel: each
+    # blame is an independent git subprocess, so threads overlap them well.
+    # Results are folded back in the original file order, so the output
+    # (including dict order and duplicate-key overwrites) is unchanged.
+    targets = []
     for file_id in file_ids:
         abs_path = repo_root / file_id
         if not abs_path.exists():
@@ -72,44 +104,33 @@ def compute_kci(df_files, repo_root):
             if not abs_path.exists():
                 continue
             file_id = stripped
+        targets.append((normalize_path(file_id), abs_path))
 
-        norm_key = normalize_path(file_id)
+    workers = max(1, min(_BLAME_WORKERS, len(targets)))
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            blamed = list(pool.map(lambda t: _blame_author_lines(repo_root, t[1]), targets))
+    else:
+        blamed = [_blame_author_lines(repo_root, t[1]) for t in targets]
 
-        try:
-            output = subprocess.check_output(
-                ["git", "-C", str(repo_root), "blame", "--line-porcelain", str(abs_path)],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            )
-            
-            dev_lines = defaultdict(int)
-            author = None
-            
-            for line in output.splitlines():
-                if line.startswith("author "):
-                    author = line.replace("author ", "").strip()
-                elif line.startswith("\t"):
-                    if author:
-                        dev_lines[author] += 1
-            
-            total_lines = sum(dev_lines.values())
-            line_counts[norm_key] = total_lines
-            
-            if total_lines == 0:
-                continue
-            
-            ownership = {dev: lines / total_lines for dev, lines in dev_lines.items()}
-            ownership_results[norm_key] = ownership
-            
-        except subprocess.CalledProcessError:
+    for (norm_key, _), dev_lines in zip(targets, blamed):
+        if dev_lines is None:
             continue
-    
+        total_lines = sum(dev_lines.values())
+        line_counts[norm_key] = total_lines
+
+        if total_lines == 0:
+            continue
+
+        ownership = {dev: lines / total_lines for dev, lines in dev_lines.items()}
+        ownership_results[norm_key] = ownership
+
     kci = {}
     for norm_key, owners in ownership_results.items():
         if len(owners) == 0:
             continue
         kci[norm_key] = max(owners.values())
-    
+
     return kci, line_counts, ownership_results
 
 def compute_in_degree(repo_root):

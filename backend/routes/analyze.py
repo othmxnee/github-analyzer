@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from flask import Blueprint, request, jsonify, session
 from extensions import limiter
 from services.analyzer import (
@@ -33,7 +36,33 @@ def _provider_for_url(repo_url):
     return None
 
 
+# Local mode: only the desktop app / VS Code extension bridge (bridge.py) sets
+# GA_LOCAL_MODE=1. It accepts "local:<absolute path>" keys that clone from
+# disk. The public web server never enables it, so it cannot be asked to read
+# arbitrary paths on the host.
+LOCAL_MODE = os.environ.get('GA_LOCAL_MODE') == '1'
+LOCAL_PREFIX = 'local:'
+_LOCAL_HEADS = {}   # local key -> HEAD sha that the cached analysis was made from
+
+
+def _local_path(repo_url):
+    if LOCAL_MODE and isinstance(repo_url, str) and repo_url.startswith(LOCAL_PREFIX):
+        return repo_url[len(LOCAL_PREFIX):]
+    return None
+
+
+def _local_head(path):
+    try:
+        out = subprocess.run(['git', '-C', path, 'rev-parse', 'HEAD'],
+                             capture_output=True, text=True, timeout=15)
+        return out.stdout.strip() if out.returncode == 0 else None
+    except Exception:
+        return None
+
+
 def _validate_repo_url(repo_url):
+    if _local_path(repo_url):
+        return os.path.isdir(_local_path(repo_url))
     return _provider_for_url(repo_url) is not None
 
 
@@ -53,6 +82,15 @@ def analyze():
         if not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
         force = bool(data.get('force', False))
+        local_path = _local_path(repo_url)
+        if local_path:
+            # Re-analyze automatically when the checked-out commit changed;
+            # otherwise the cached result is still exact and returns instantly.
+            head = _local_head(local_path)
+            if head and _LOCAL_HEADS.get(repo_url) not in (None, head):
+                force = True
+            _LOCAL_HEADS[repo_url] = head
+            return jsonify(start_analysis(repo_url, force=force, local_path=local_path))
         provider = _provider_for_url(repo_url)
         token = session.get(f'{provider}_token') if provider else None
         return jsonify(start_analysis(repo_url, force=force, token=token, provider=provider))
@@ -147,6 +185,9 @@ def avatars():
         repo_url = data.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL.'}), 400
+        if _local_path(repo_url):
+            # Offline clients never send developer emails to GitHub.
+            return jsonify({'status': 'done', 'avatars': {}})
         force = bool(data.get('force'))
         provider = _provider_for_url(repo_url)
         token = session.get(f'{provider}_token') if provider else None
@@ -166,6 +207,8 @@ def avatars_result():
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL.'}), 400
+        if _local_path(repo_url):
+            return jsonify({'status': 'done', 'avatars': {}})
         return jsonify(get_avatar_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
