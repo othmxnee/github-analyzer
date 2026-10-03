@@ -1,0 +1,133 @@
+{
+  "name": "github-analyzer",
+  "displayName": "GitHub Analyzer",
+  "description": "Knowledge risk, bus factor, hotspots and developer roles for your local Git repositories. Same dashboard and engine as the website, fully offline.",
+  "version": "2.0.0",
+  "publisher": "othmxnee",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/othmxnee/github-analyzer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/othmxnee/github-analyzer/issues"
+  },
+  "homepage": "https://github.com/othmxnee/github-analyzer#readme",
+  "keywords": [
+    "git",
+    "bus factor",
+    "code ownership",
+    "knowledge risk",
+    "developer roles",
+    "hotspots"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "SCM Providers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:githubAnalyzer.summary"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "githubAnalyzer.analyze",
+        "title": "Analyze Repository",
+        "category": "GitHub Analyzer",
+        "icon": "$(play)"
+      },
+      {
+        "command": "githubAnalyzer.openDashboard",
+        "title": "Open Dashboard",
+        "category": "GitHub Analyzer",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "githubAnalyzer.refresh",
+        "title": "Re-analyze",
+        "category": "GitHub Analyzer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "githubAnalyzer.setupEngine",
+        "title": "Set Up Analysis Engine",
+        "category": "GitHub Analyzer"
+      },
+      {
+        "command": "githubAnalyzer.showLog",
+        "title": "Show Engine Log",
+        "category": "GitHub Analyzer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "githubAnalyzer",
+          "title": "GitHub Analyzer",
+          "icon": "$(git-commit)"
+        }
+      ]
+    },
+    "views": {
+      "githubAnalyzer": [
+        {
+          "id": "githubAnalyzer.summary",
+          "name": "Repository Summary"
+        },
+        {
+          "id": "githubAnalyzer.developers",
+          "name": "Developers"
+        },
+        {
+          "id": "githubAnalyzer.risks",
+          "name": "Risk Indicators"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "githubAnalyzer.analyze",
+          "when": "view == githubAnalyzer.summary",
+          "group": "navigation"
+        },
+        {
+          "command": "githubAnalyzer.openDashboard",
+          "when": "view == githubAnalyzer.summary",
+          "group": "navigation"
+        },
+        {
+          "command": "githubAnalyzer.refresh",
+          "when": "view == githubAnalyzer.summary",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "GitHub Analyzer",
+      "properties": {
+        "githubAnalyzer.pythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Python 3.11+ to run the analysis engine with. Leave empty to use the extension's private environment (created by **Set Up Analysis Engine**) or `python3` / `python`."
+        },
+        "githubAnalyzer.enginePath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional path to a frozen engine binary (`analyzer_bridge`), for example the one inside the GitHub Analyzer desktop app. When set, no Python is needed."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "prepare-assets": "node scripts/prepare.js",
+    "vscode:prepublish": "node scripts/prepare.js",
+    "package": "npx --yes @vscode/vsce package"
+  }
+}
