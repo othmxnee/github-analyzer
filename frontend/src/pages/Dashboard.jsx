@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useRef, Component } from 'react'
+import { useEffect, useState, useCallback, useRef, Component, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
+import '../chartDefaults'
 import TopDevelopersChart from '../components/Charts/TopDevelopersChart'
 import TimelineChart from '../components/Charts/TimelineChart'
 import LorenzChart from '../components/Charts/LorenzChart'
@@ -12,24 +13,38 @@ import HotspotFilesChart from '../components/Charts/HotspotFilesChart'
 import ActivityHeatmap from '../components/Charts/ActivityHeatmap'
 import OwnershipConcentration from '../components/Charts/OwnershipConcentration'
 import CommitFrequencyChart from '../components/Charts/CommitFrequencyChart'
-import ArchitectureGraph from '../components/Charts/ArchitectureGraph'
 import BusFactorRiskVisualization from '../components/Charts/BusFactorRiskVisualization'
 import ProjectRiskSummary, { downloadPDF } from '../components/Charts/ProjectRiskSummary'
 import OverviewSection from '../components/Charts/OverviewSection'
-import VoronoiTreemap from '../components/Charts/VoronoiTreemap'
 import DevelopersList from '../components/Charts/DevelopersList'
-import RoleDistributionChart from '../components/Charts/RoleDistributionChart'
 import SkillsHeatmap from '../components/Charts/SkillsHeatmap'
-import DeveloperRadarChart from '../components/Charts/DeveloperRadarChart'
 import DeveloperScatterPlot from '../components/Charts/DeveloperScatterPlot'
 import KnowledgeRiskCards from '../components/Charts/KnowledgeRiskCards'
 import OrphanedFilesTable from '../components/Charts/OrphanedFilesTable'
-import CollaborationNetwork from '../components/Charts/CollaborationNetwork'
 import BusFactorTrendChart from '../components/Charts/BusFactorTrendChart'
 import TimelineCard from '../components/TimelineCard'
+
+/* Charts built on heavy libraries (d3, react-force-graph, recharts) load on
+   demand, so opening the dashboard only downloads what the first tab needs. */
+const ArchitectureGraph = lazy(() => import('../components/Charts/ArchitectureGraph'))
+const CollaborationNetwork = lazy(() => import('../components/Charts/CollaborationNetwork'))
+const VoronoiTreemap = lazy(() => import('../components/Charts/VoronoiTreemap'))
+const RoleDistributionChart = lazy(() => import('../components/Charts/RoleDistributionChart'))
+const DeveloperRadarChart = lazy(() => import('../components/Charts/DeveloperRadarChart'))
+
+const ChartFallback = () => (
+  <div style={{ minHeight: 120, display: 'grid', placeItems: 'center', color: 'var(--t3)', fontSize: 11, fontFamily: 'var(--mono)' }}>
+    loading chart…
+  </div>
+)
 import ComparisonList from '../components/ComparisonList'
 import MetricDetailModal, { SeeAllButton } from '../components/MetricDetailModal'
-import { API_URL } from '../services/api'
+import {
+  getRepoAnalysisResult, startSkillsAnalysis, getSkillsResult,
+  startAvatarJob, getAvatarResult, pollDelay, wait,
+} from '../services/api'
+import { loadResults, clearResults } from '../services/resultStore'
+import { isEmbedded, isLocalKey, repoLabel } from '../services/host'
 import '../styles/Dashboard.css'
 import '../styles/Timeline.css'
 
@@ -178,7 +193,7 @@ function ChartCard({ title, sub, action, children }) {
         )}
       </div>
       <div style={{ padding: '18px' }}>
-        <ErrorBoundary>{children}</ErrorBoundary>
+        <ErrorBoundary><Suspense fallback={<ChartFallback />}>{children}</Suspense></ErrorBoundary>
       </div>
     </div>
   )
@@ -321,11 +336,20 @@ export default function Dashboard() {
 
   /* ── load results ── */
   useEffect(() => {
-    const stored = sessionStorage.getItem('analysisResults')
-    const url    = sessionStorage.getItem('repoUrl')
-    if (!stored) { navigate('/'); return }
-    setResults(JSON.parse(stored))
-    setRepoUrl(url || '')
+    const { url, results: stored } = loadResults()
+    if (stored) { setResults(stored); setRepoUrl(url || ''); return }
+    if (!url) { navigate('/'); return }
+    // Refreshed without a stored copy (result too big for sessionStorage):
+    // the engine still holds the finished analysis, so read it back.
+    let cancelled = false
+    getRepoAnalysisResult(url)
+      .then(data => {
+        if (cancelled) return
+        if (data.status === 'done') { setResults(data); setRepoUrl(url) }
+        else navigate('/')
+      })
+      .catch(() => { if (!cancelled) navigate('/') })
+    return () => { cancelled = true }
   }, [navigate])
 
   /* ── fetch skills (lazy: starts when user first visits "Developer Roles" or
@@ -344,12 +368,10 @@ export default function Dashboard() {
     setSkillsLoading(true)
     setSkillsError(null)
 
-    let interval = null
     let cancelled = false
 
     const pollOnce = () =>
-      fetch(`${API_URL}/analyze/skills/result?repo_url=${encodeURIComponent(repoUrl)}`, { credentials: 'include' })
-        .then(r => r.json())
+      getSkillsResult(repoUrl)
         .then(data => {
           if (cancelled) return false
           if (data.status === 'done')  { setSkillsData(data);        setSkillsLoading(false); return true }
@@ -360,71 +382,44 @@ export default function Dashboard() {
 
     const run = async () => {
       // Kick off backend job — idempotent, returns immediately if already done/running
-      await fetch(`${API_URL}/analyze/skills`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: repoUrl }),
-      }).catch(() => {})
-
-      if (cancelled) return
+      await startSkillsAnalysis(repoUrl).catch(() => {})
       // First poll immediately — shows cached result on re-visit without any wait
-      const done = await pollOnce()
-      if (done) return
-
-      interval = setInterval(async () => {
-        const finished = await pollOnce()
-        if (finished && interval) clearInterval(interval)
-      }, 5000)
+      for (let attempt = 0; !cancelled; attempt++) {
+        if (await pollOnce()) return
+        await wait(pollDelay(attempt))
+      }
     }
 
     run().catch(err => { if (!cancelled) { setSkillsError(err.message); setSkillsLoading(false) } })
 
-    return () => { cancelled = true; if (interval) clearInterval(interval) }
+    return () => { cancelled = true }
   }, [repoUrl, activeSection, skillsData])
 
   /* ── fetch real GitHub profile photos (background job; progressive) ──
      Kicks off when the user first opens the Developers tab, then polls every
      few seconds, merging in photos as they resolve. Stops once the job is done. */
   useEffect(() => {
-    if (!repoUrl || activeSection !== 'developers') return
+    // Offline clients never look developers up on GitHub (privacy + no network).
+    if (!repoUrl || activeSection !== 'developers' || isEmbedded || isLocalKey(repoUrl)) return
 
-    let interval = null
     let cancelled = false
-
-    const pollOnce = () =>
-      fetch(`${API_URL}/analyze/avatars/result?repo_url=${encodeURIComponent(repoUrl)}`, { credentials: 'include' })
-        .then(r => r.json())
-        .then(data => {
-          if (cancelled) return false
-          if (data.avatars && Object.keys(data.avatars).length) setAvatars(data.avatars)
-          return data.status === 'done'
-        })
-        .catch(() => false)
+    const merge = (data) => {
+      if (!cancelled && data?.avatars && Object.keys(data.avatars).length) setAvatars(data.avatars)
+    }
 
     const run = async () => {
       // Idempotent: starts the job if not already running/done, returns current map.
-      await fetch(`${API_URL}/analyze/avatars`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: repoUrl }),
-      }).then(r => r.json())
-        .then(data => { if (!cancelled && data.avatars && Object.keys(data.avatars).length) setAvatars(data.avatars) })
-        .catch(() => {})
-
-      if (cancelled) return
-      const done = await pollOnce()
-      if (done) return
-
-      interval = setInterval(async () => {
-        const finished = await pollOnce()
-        if (finished && interval) clearInterval(interval)
-      }, 4000)
+      await startAvatarJob(repoUrl).then(merge).catch(() => {})
+      for (let attempt = 0; !cancelled; attempt++) {
+        const data = await getAvatarResult(repoUrl).catch(() => null)
+        merge(data)
+        if (data?.status === 'done') return
+        await wait(Math.max(2000, pollDelay(attempt)))
+      }
     }
 
     run()
-    return () => { cancelled = true; if (interval) clearInterval(interval) }
+    return () => { cancelled = true }
   }, [repoUrl, activeSection])
 
   const toggleTheme = useCallback(() => {
@@ -492,12 +487,7 @@ export default function Dashboard() {
     overview = {}
   } = results
 
-  const repoSlug = (() => {
-    try {
-      const parts = repoUrl.replace(/\.git$/, '').split('/')
-      return parts.slice(-2).join(' / ')
-    } catch { return repoUrl }
-  })()
+  const repoSlug = repoLabel(repoUrl)
 
   const giniRisk  = gini > 0.8 ? 'danger' : gini > 0.6 ? 'warning' : 'ok'
   const busRisk   = bus_factor <= 2 ? 'danger' : bus_factor <= 4 ? 'warning' : 'ok'
@@ -964,19 +954,21 @@ export default function Dashboard() {
 
         {/* Right: actions */}
         <div className="dash-topbar-right">
-          <a
-            href={repoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="dash-gh-btn"
-          >
-            <Icon.GitHub />
-            View on GitHub
-          </a>
+          {!isLocalKey(repoUrl) && (
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="dash-gh-btn"
+            >
+              <Icon.GitHub />
+              View on GitHub
+            </a>
+          )}
           <button
             className="dash-reanalyze-btn"
             onClick={() => {
-              sessionStorage.removeItem('analysisResults')
+              clearResults()
               navigate('/', { state: { repoUrl, autoSubmit: true } })
             }}
           >
@@ -1071,10 +1063,12 @@ export default function Dashboard() {
             className="dash-section-anim"
             style={activeSection === 'developers' ? { flex: 1, minHeight: 0, display: 'flex' } : {}}
           >
-            {activeSection === 'developers'
-              ? <DevelopersList results={{ ...results, avatars }} skillsData={skillsData} skillsLoading={skillsLoading} initialSelected={devSelection} />
-              : (sectionMap[activeSection] || renderOverview)()
-            }
+            <Suspense fallback={<ChartFallback />}>
+              {activeSection === 'developers'
+                ? <DevelopersList results={{ ...results, avatars }} skillsData={skillsData} skillsLoading={skillsLoading} initialSelected={devSelection} />
+                : (sectionMap[activeSection] || renderOverview)()
+              }
+            </Suspense>
           </div>
         </main>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { getRepoAnalysisResult, startRepoAnalysis, API_URL } from '../services/api'
+import { getRepoAnalysisResult, startRepoAnalysis, startSkillsAnalysis, pollDelay, wait } from '../services/api'
+import { saveResults } from '../services/resultStore'
 import { useAuth } from '../hooks/useAuth'
 import { useReveal, useEntrance, CountUp, useInView } from '../hooks/useMotion'
 import AuthButton from '../components/AuthButton'
@@ -261,7 +262,6 @@ export default function Home() {
   }, [])
 
   const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior:'smooth' })
-  const wait     = ms => new Promise(r => setTimeout(r, ms))  // eslint-disable-line
 
   /* ── auto-submit when coming back from Dashboard "Re-analyze" ── */
   useEffect(() => {
@@ -295,41 +295,18 @@ export default function Home() {
       const start = await startRepoAnalysis(url, force)
       if (start.error) throw new Error(start.error)
       let results = null
-      while (true) {
+      for (let attempt = 0; ; attempt++) {
         const data = await getRepoAnalysisResult(url)
         if (data.status === 'done')  { results = data; break }
         if (data.status === 'error') throw new Error(data.error || 'Analysis failed')
         if (data.phase) setPhase(data.phase)
-        await wait(5000)
+        await wait(pollDelay(attempt))
       }
-      try {
-        sessionStorage.setItem('analysisResults', JSON.stringify(results))
-        sessionStorage.setItem('repoUrl', url)
-      } catch (storageErr) {
-        // sessionStorage quota exceeded (large repo) — store a trimmed version
-        const trimmed = {
-          ...results,
-          ownership_table: (results.ownership_table || []).slice(0, 200),
-          dev_file_matrix: { developers: [], files: [], values: [] },
-        }
-        try {
-          sessionStorage.setItem('analysisResults', JSON.stringify(trimmed))
-          sessionStorage.setItem('repoUrl', url)
-        } catch {
-          setError('Repository data is too large to display in the browser. Try a smaller repository.')
-          setLoading(false)
-          return
-        }
-      }
+      saveResults(url, results)
       saveHistory(url)
       setRepoHistory(loadHistory())
       // Kick off skills analysis in the background so it's ready when user clicks the tab
-      fetch(`${API_URL}/analyze/skills`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ repo_url: url }),
-      }).catch(() => {})
+      startSkillsAnalysis(url).catch(() => {})
       navigate('/dashboard')
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Unknown error'

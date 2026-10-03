@@ -1,4 +1,5 @@
 import { useRef } from "react"
+import { saveFile } from "../../services/host"
 
 function riskStyle(level = "Moderate") {
   const map = {
@@ -66,16 +67,11 @@ const sevColorPDF = (sev) =>
   : sev === "ok"     ? PDF_COLORS.green
   : PDF_COLORS.muted
 
+/* jsPDF ships with the app as its own lazily-loaded chunk: no CDN request
+   (works offline in the desktop app / VS Code) and nothing downloaded
+   until someone actually exports a report. */
 async function loadJsPDF() {
-  if (window.jspdf) return window.jspdf
-  await new Promise((resolve, reject) => {
-    const script = document.createElement("script")
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-    script.onload = resolve
-    script.onerror = reject
-    document.head.appendChild(script)
-  })
-  return window.jspdf
+  return import("jspdf")
 }
 
 export async function downloadPDF(score, level, insights, recommendations, dimensions, extra = {}) {
@@ -414,7 +410,7 @@ export async function downloadPDF(score, level, insights, recommendations, dimen
   }
 
   const safeName = (repoSlug || "repository").replace(/[^a-z0-9-]+/gi, "-").toLowerCase()
-  doc.save(`${safeName}-health-report.pdf`)
+  await saveFile(`${safeName}-health-report.pdf`, "application/pdf", doc.output("blob"))
 }
 
 /* ── small date helpers (PDF-side) ──────────────────────────────────── */
