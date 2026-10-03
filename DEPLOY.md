@@ -75,6 +75,36 @@ start-up (Alembic migrations), store every analysis, serve
 Private repositories: results of a repository that needed a sign-in to clone
 are only served to visitors whose own session can read that repository.
 
+## 3c. Nightly re-checks and alerts (needs 3b)
+
+Signed-in users can **Watch** a public repository from its dashboard and get
+alerts by email (confirmed through a link) and/or Slack. A scheduled job
+re-analyzes watched repositories whose latest commit changed and sends what
+got worse since the previous analysis.
+
+1. **Email**: set these on the API service *and* the cron job. Any SMTP
+   provider works (Resend, Postmark, Amazon SES, Mailgun...):
+
+   | Variable | Example |
+   |---|---|
+   | `SMTP_HOST` / `SMTP_PORT` | `smtp.resend.com` / `587` |
+   | `SMTP_USERNAME` / `SMTP_PASSWORD` | from the provider |
+   | `SMTP_FROM` | `Git Analyzer <alerts@yourdomain.com>` (a verified domain) |
+
+   Without `SMTP_HOST` the dashboard only offers Slack alerts.
+2. **Cron job**: Render dashboard → **New → Cron Job**, same repository,
+   Docker, `backend/Dockerfile`, schedule `0 3 * * *` (03:00 UTC), command
+   `python -m jobs.nightly`. Give it the same `DATABASE_URL`, `SMTP_*`,
+   `FLASK_SECRET_KEY` (signs unsubscribe links), `FRONTEND_URL` and
+   `BACKEND_URL` as the API. It costs about $1/month at this volume.
+3. Private repositories are skipped by the nightly job until the GitHub App
+   exists (it needs credentials that don't depend on a user being signed in).
+
+Alert rules and their thresholds live in `backend/services/alerts.py`
+(health -10 points, orphaned knowledge +5 points, a 20 %+ owner quiet for
+45+ days, bus factor drop, a file newly above risk 0.70). They compare
+existing metrics between two analyses; they don't change any metric.
+
 ## 4. Deploy
 
 With the variables set, trigger a deploy on each service (**Manual Deploy** if

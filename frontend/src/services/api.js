@@ -89,3 +89,11 @@ export const getMetricTimeline = (metric, repoUrl, { start, end, compare, compar
   }
   return request('GET', `/metric/${metric}`, { query })
 }
+
+/* ── Stored history and alerts (website with a database only) ── */
+export const getHistory = (repoUrl) => request('GET', '/history', { query: { repo_url: repoUrl } })
+export const getAlerts = (repoUrl) => request('GET', '/alerts', { query: { repo_url: repoUrl } })
+export const createWatch = (repoUrl, { email, slackWebhookUrl } = {}) =>
+  request('POST', '/watch', { body: { repo_url: repoUrl, email: email || null, slack_webhook_url: slackWebhookUrl || null } })
+export const listWatches = () => request('GET', '/watches')
+export const deleteWatch = (id) => request('DELETE', `/watch/${id}`)
