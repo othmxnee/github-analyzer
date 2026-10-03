@@ -968,6 +968,9 @@ export default function Dashboard() {
               View on GitHub
             </a>
           )}
+          {!isEmbedded && !isLocalKey(repoUrl) && repoUrl && (
+            <button className="dash-reanalyze-btn" onClick={() => navigate('/portfolio')}>My repositories</button>
+          )}
           {!isEmbedded && !isLocalKey(repoUrl) && repoUrl && <WatchButton repoUrl={repoUrl} />}
           <button
             className="dash-reanalyze-btn"
