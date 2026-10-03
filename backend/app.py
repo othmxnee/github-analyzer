@@ -49,6 +49,14 @@ CORS(app, origins=[o.strip() for o in _origins.split(',') if o.strip()], support
 app.register_blueprint(analyze_bp)
 app.register_blueprint(auth_bp)
 
+# Optional persistence: with DATABASE_URL set, bind and migrate at start-up.
+# A failed migration stops the boot on purpose (a deploy should fail loudly,
+# not silently run without storage). The local engine bridge (desktop app,
+# VS Code) never uses a database and never imports the database libraries.
+if os.environ.get('DATABASE_URL') and os.environ.get('GA_LOCAL_MODE') != '1':
+    import db  # noqa: E402
+    db.init_from_env()
+
 
 # Prime numba's JIT in the background so the first Developer Roles request does
 # not pay ~tens of seconds of compilation. Threaded so gunicorn can bind the

@@ -3,6 +3,8 @@ import subprocess
 
 from flask import Blueprint, request, jsonify, session
 from extensions import limiter
+from services import access, store
+from services import analyzer as analyzer_service
 from services.analyzer import (
     get_analysis_result,
     get_architecture,
@@ -66,6 +68,20 @@ def _validate_repo_url(repo_url):
     return _provider_for_url(repo_url) is not None
 
 
+def _session_token(repo_url):
+    provider = _provider_for_url(repo_url)
+    return session.get(f'{provider}_token') if provider else None
+
+
+def _forbidden(repo_url):
+    """403 response when repo_url is private and this visitor cannot read it, else None."""
+    if LOCAL_MODE or not repo_url or _local_path(repo_url):
+        return None
+    if analyzer_service.is_private(repo_url) and not access.can_read(repo_url, _session_token(repo_url)):
+        return jsonify({'error': 'This repository is private. Sign in with an account that can read it.'}), 403
+    return None
+
+
 # Backwards-compat alias — some places may still call this name.
 def _validate_github_url(repo_url):
     return _validate_repo_url(repo_url)
@@ -93,7 +109,12 @@ def analyze():
             return jsonify(start_analysis(repo_url, force=force, local_path=local_path))
         provider = _provider_for_url(repo_url)
         token = session.get(f'{provider}_token') if provider else None
-        return jsonify(start_analysis(repo_url, force=force, token=token, provider=provider))
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
+        private = access.is_private_repo(repo_url, token) if token else None
+        return jsonify(start_analysis(repo_url, force=force, token=token, provider=provider,
+                                      private=private))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -104,6 +125,9 @@ def analyze_result():
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_analysis_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -115,6 +139,9 @@ def architecture():
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_architecture(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -126,6 +153,9 @@ def busfactor_simulation():
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_busfactor_simulation(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -137,6 +167,9 @@ def project_summary():
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_project_summary_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -148,6 +181,9 @@ def voronoi():
         repo_url = request.args.get('repo_url')
         if repo_url and not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_voronoi_data(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -165,6 +201,10 @@ def skills():
         repo_url = data['repo_url']
         if not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
+        analyzer_service.ensure_loaded(repo_url)
         result = analyze_skills(repo_url)
         return jsonify(result)
     except Exception as e:
@@ -188,6 +228,9 @@ def avatars():
         if _local_path(repo_url):
             # Offline clients never send developer emails to GitHub.
             return jsonify({'status': 'done', 'avatars': {}})
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         force = bool(data.get('force'))
         provider = _provider_for_url(repo_url)
         token = session.get(f'{provider}_token') if provider else None
@@ -209,6 +252,9 @@ def avatars_result():
             return jsonify({'error': 'Invalid repository URL.'}), 400
         if _local_path(repo_url):
             return jsonify({'status': 'done', 'avatars': {}})
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
         return jsonify(get_avatar_result(repo_url))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -228,6 +274,10 @@ def metric_timeline(metric):
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL.'}), 400
+
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
 
         start        = request.args.get('start') or None
         end          = request.args.get('end')   or None
@@ -257,6 +307,38 @@ def skills_result():
         repo_url = request.args.get('repo_url')
         if not repo_url or not _validate_github_url(repo_url):
             return jsonify({'error': 'Invalid repository URL. Supported hosts: github.com, gitlab.com, bitbucket.org'}), 400
-        return jsonify(get_skills_result(repo_url))
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
+        analyzer_service.ensure_loaded(repo_url)
+        result = get_skills_result(repo_url)
+        run_id = analyzer_service.current_run_id(repo_url)
+        if result.get('status') == 'done' and run_id and run_id not in _SKILLS_SAVED:
+            _SKILLS_SAVED.add(run_id)
+            store.save_skills(repo_url, result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+_SKILLS_SAVED = set()   # run ids whose roles result is already stored
+
+
+@analyze_bp.route('/history', methods=['GET'])
+def history():
+    """Headline numbers of every stored analysis of a repository, newest first.
+
+    Empty when the server runs without a database (DATABASE_URL unset).
+    """
+    try:
+        repo_url = request.args.get('repo_url')
+        if not repo_url or not _validate_repo_url(repo_url) or _local_path(repo_url):
+            return jsonify({'error': 'Invalid repository URL.'}), 400
+        denied = _forbidden(repo_url)
+        if denied:
+            return denied
+        limit = max(1, min(int(request.args.get('limit', 60)), 365))
+        return jsonify({'repo_url': repo_url, 'enabled': store.enabled(),
+                        'runs': store.history(repo_url, limit=limit)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

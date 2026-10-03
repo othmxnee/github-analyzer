@@ -52,6 +52,10 @@ from utils.collaboration import build_collaboration_network
 
 INACTIVE_MONTHS = 12  # a developer/file is "inactive" after this many idle months
 
+ENGINE_VERSION = "2.0.0"
+
+from services import store  # persistence; a no-op unless DATABASE_URL is set
+
 
 _ANALYSIS_CACHE = {}
 _ANALYSIS_STATUS = {}
@@ -62,6 +66,9 @@ _LAST_REPO_URL = None
 # Cleaned dataframes + ownership snapshots kept so windowed timeline metrics
 # can re-slice without re-cloning. Same keys as _ANALYSIS_CACHE.
 _CLEANED_CACHE = {}   # repo_url -> {"df_commits": ..., "df_files": ..., "ownership_results": ..., "line_counts": ..., "architecture": ..., "kci_data": ...}
+
+_RUN_IDS = {}         # repo_url -> id of the stored run that produced the cached result
+_REPO_PRIVATE = {}    # repo_url -> True when the repo needed a sign-in to clone
 
 CACHE_TTL = 30 * 60        # 30 minutes — auto-rerun after this on next request
 CACHE_MAX_AGE = 24 * 3600  # 24 hours  — hard eviction (frees memory)
@@ -94,7 +101,8 @@ def _build_clone_url(repo_url: str, token: str, provider: str) -> str:
     return repo_url.replace('https://', f'https://{userinfo}@', 1)
 
 
-def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_path: str = None):
+def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_path: str = None,
+                  trigger: str = "manual", private: bool = None):
     """Clone, mine and compute everything for one repository.
 
     `local_path` (desktop app / VS Code extension only) clones a repository
@@ -106,6 +114,8 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_
     """
     global _LAST_REPO_URL
     tmp_dir = tempfile.mkdtemp()
+    run_id = store.run_started(repo_url, trigger=trigger, engine_version=ENGINE_VERSION, private=private)
+    _RUN_IDS[repo_url] = run_id
     try:
         _ANALYSIS_STATUS[repo_url] = 'running'
 
@@ -135,7 +145,11 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_
                 raise ValueError("Authentication failed. Sign in to the matching provider for private repos.")
             raise ValueError(f"git clone failed: {stderr or f'exit code {result.returncode}'}")
 
+        head = subprocess.run(["git", "-C", tmp_dir, "rev-parse", "HEAD"], capture_output=True, text=True)
+        head_sha = head.stdout.strip() if head.returncode == 0 else None
+
         _ANALYSIS_PHASE[repo_url] = 'extracting'
+        store.run_phase(run_id, 'extracting')
         commits_data, file_modifications = extract_data(tmp_dir)
 
         # Hand the skills pipeline the commit data from this same clone so the
@@ -143,9 +157,11 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_
         _prime_skill_cache(repo_url, commits_data, file_modifications)
 
         _ANALYSIS_PHASE[repo_url] = 'cleaning'
+        store.run_phase(run_id, 'cleaning')
         df_commits, df_files = clean_data(commits_data, file_modifications)
 
         _ANALYSIS_PHASE[repo_url] = 'computing'
+        store.run_phase(run_id, 'computing')
         results, internals = compute_metrics(tmp_dir, df_commits, df_files, commits_data)
 
         # Profile pictures are resolved separately, as a background job kicked
@@ -169,7 +185,14 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_
         _ANALYSIS_TIMESTAMPS[repo_url] = time.time()
         _ANALYSIS_STATUS[repo_url] = 'done'
         _ANALYSIS_PHASE.pop(repo_url, None)
+        if run_id:
+            from services import skill_service
+            store.run_finished(run_id, results, head_sha=head_sha, cleaned={
+                "cleaned": _CLEANED_CACHE[repo_url],
+                "prebuilt": skill_service._commits_cache.get(repo_url),
+            })
     except Exception as exc:
+        store.run_failed(run_id, exc)
         _ANALYSIS_STATUS[repo_url] = 'error'
         _ANALYSIS_PHASE.pop(repo_url, None)
         _ANALYSIS_CACHE[repo_url] = {
@@ -221,9 +244,55 @@ def _prime_skill_cache(repo_url, commits_data, file_modifications):
         logger.exception("Failed to prime skill cache for %s", repo_url)
 
 
+def _hydrate(repo_url):
+    """Load the latest stored result into the in-memory caches (after a
+    restart, an eviction, or when another worker process ran the analysis).
+    Returns True when the repository is now cached in memory as 'done'."""
+    if repo_url in _ANALYSIS_STATUS or not store.enabled():
+        return False
+    snap = store.load_latest_done(repo_url)
+    if not snap or not isinstance(snap.get("cleaned"), dict):
+        return False
+    from services import skill_service, timeline_service
+    _ANALYSIS_CACHE[repo_url] = snap["results"]
+    _CLEANED_CACHE[repo_url] = snap["cleaned"]["cleaned"]
+    if snap["cleaned"].get("prebuilt"):
+        skill_service.set_prebuilt_commits(repo_url, snap["cleaned"]["prebuilt"])
+    if snap.get("skills"):
+        skill_service._cache[repo_url] = snap["skills"]
+        skill_service._status[repo_url] = 'done'
+    timeline_service.invalidate_for_repo(repo_url)
+    _RUN_IDS[repo_url] = snap["run_id"]
+    _ANALYSIS_TIMESTAMPS[repo_url] = snap["finished_at"].timestamp()
+    _ANALYSIS_STATUS[repo_url] = 'done'
+    return True
+
+
+def is_private(repo_url):
+    """True / False when known (memory, then database), None when unknown."""
+    if repo_url in _REPO_PRIVATE:
+        return _REPO_PRIVATE[repo_url]
+    flag = store.is_private(repo_url)
+    if flag is not None:
+        _REPO_PRIVATE[repo_url] = flag
+    return flag
+
+
+def current_run_id(repo_url):
+    return _RUN_IDS.get(repo_url)
+
+
+def ensure_loaded(repo_url):
+    """Make a stored analysis available in memory (no-op without a database)."""
+    _hydrate(repo_url)
+
+
 def start_analysis(repo_url: str, force: bool = False, token: str = None, provider: str = None,
-                   local_path: str = None):
+                   local_path: str = None, trigger: str = "manual", private: bool = None):
     _evict_stale_entries()
+    if private is not None:
+        _REPO_PRIVATE[repo_url] = bool(private)
+    _hydrate(repo_url)
 
     status = _ANALYSIS_STATUS.get(repo_url)
 
@@ -250,7 +319,13 @@ def start_analysis(repo_url: str, force: bool = False, token: str = None, provid
         return {'status': 'done', 'analyzed_at': _ANALYSIS_TIMESTAMPS.get(repo_url)}
 
     if status != 'running':
-        thread = threading.Thread(target=_run_analysis, args=(repo_url, token, provider, local_path),
+        # Mark as running *before* the thread starts: otherwise a poll in
+        # between would see an unknown repo and reload the previous stored
+        # result as "done" while the new analysis is only starting.
+        _ANALYSIS_STATUS[repo_url] = 'running'
+        _ANALYSIS_PHASE[repo_url] = 'cloning'
+        thread = threading.Thread(target=_run_analysis,
+                                  args=(repo_url, token, provider, local_path, trigger, private),
                                   daemon=True)
         thread.start()
 
@@ -258,6 +333,14 @@ def start_analysis(repo_url: str, force: bool = False, token: str = None, provid
 
 
 def get_analysis_result(repo_url: str):
+    if repo_url not in _ANALYSIS_STATUS and store.enabled():
+        if not _hydrate(repo_url):
+            # Possibly running in another worker process: report its progress.
+            latest = store.latest_state(repo_url)
+            if latest and latest["status"] == "running":
+                return {'status': 'running', 'phase': latest["phase"] or 'starting'}
+            if latest and latest["status"] == "error":
+                return {'status': 'error', 'error': latest["error"] or 'Analysis failed'}
     status = _ANALYSIS_STATUS.get(repo_url, 'not_started')
 
     if status == 'done':
@@ -285,6 +368,7 @@ def get_developer_emails(repo_url: str):
     falls back to the cached result's `dev_stats` keys if that's been evicted.
     Returns [] if the repo hasn't been analyzed.
     """
+    _hydrate(repo_url)
     cleaned = _CLEANED_CACHE.get(repo_url)
     if cleaned is not None:
         df = cleaned.get("df_commits")
@@ -962,6 +1046,7 @@ def compute_developer_activity_over_time(df_files, top_n=5):
 
 def _resolve_analysis(repo_url=None):
     if repo_url:
+        _hydrate(repo_url)
         if _ANALYSIS_STATUS.get(repo_url) == 'done' and repo_url in _ANALYSIS_CACHE:
             return _ANALYSIS_CACHE[repo_url]
         raise ValueError(
@@ -1004,6 +1089,8 @@ def get_cleaned_data(repo_url=None):
     Raises if no completed analysis exists.
     """
     url = repo_url or _LAST_REPO_URL
+    if url and url not in _CLEANED_CACHE:
+        _hydrate(url)
     if not url or url not in _CLEANED_CACHE:
         raise ValueError(
             f"No cached cleaned data for '{url}'. POST /analyze and wait for status=done."
