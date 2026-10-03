@@ -1,6 +1,8 @@
 /* ── Fonts ── */
-@import url('https://fonts.bunny.net/css?family=satoshi:400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+/* Satoshi was requested from fonts.bunny.net, which does not host it (the
+   request returned an error), so the UI has always rendered in the fallback
+   stack below. The dead render-blocking request is removed; look unchanged. */
+@import './assets/fonts/jetbrains-mono.css';
 
 /* ════════════════════════════════════════
    DESIGN TOKENS — Terminal Noir
