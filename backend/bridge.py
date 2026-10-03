@@ -29,9 +29,11 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-# Must be set before the app (and routes) are imported.
+# Must be set before the app (and routes) are imported. Local clients never
+# use a database, even if the developer's environment or .env defines one.
 os.environ["GA_LOCAL_MODE"] = "1"
 os.environ.setdefault("FLASK_ENV", "local")
+os.environ.pop("DATABASE_URL", None)
 
 # Keep the protocol channel clean: anything printed by libraries (numba,
 # warnings, stray prints) goes to stderr, the JSON protocol to the saved fd.

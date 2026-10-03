@@ -59,6 +59,22 @@ settings, set the callback to the **API** URL:
 
 The path must match `BACKEND_URL` exactly, or login returns a redirect-URI error.
 
+## 3b. Keep analyses between restarts (optional, recommended)
+
+Without a database the API keeps results in memory: they vanish when the
+free service sleeps, and there is no history. Set **`DATABASE_URL`** on the
+API service to any PostgreSQL database and the API will create its tables on
+start-up (Alembic migrations), store every analysis, serve
+`GET /history?repo_url=...`, and reload results after a restart.
+
+- **Render PostgreSQL**: the free database is deleted after 30 days; a paid
+  Basic one is about $6/month. Use its *Internal Database URL*.
+- **Neon or Supabase**: both have free PostgreSQL tiers that don't expire.
+  Use the connection string they give you (`postgresql://...`).
+
+Private repositories: results of a repository that needed a sign-in to clone
+are only served to visitors whose own session can read that repository.
+
 ## 4. Deploy
 
 With the variables set, trigger a deploy on each service (**Manual Deploy** if
