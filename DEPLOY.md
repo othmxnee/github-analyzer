@@ -4,6 +4,28 @@ Two services from one `render.yaml` blueprint: a Dockerized Flask API and a
 static React site. Everything below was verified locally against a 512 MB
 memory cap (the free-tier ceiling) before being written down.
 
+## Free production setup ($0, no card) - current
+
+Everything below runs on free tiers that need no payment card:
+
+| Piece | Service | Free limits |
+|---|---|---|
+| API + website | Render (already deployed) | sleeps after 15 min idle, 512 MB, 5 GB bandwidth/month |
+| Database | Neon | 1 GB, 100 compute-hours/month, scales to zero |
+| Nightly trigger | cron-job.org | calls `POST /jobs/nightly` (30 s timeout, fine: it returns at once) |
+| Alert emails | your Gmail (SMTP + app password) | 500 emails/day |
+
+1. Fill in the five values in `deploy/.env.deploy` (git-ignored; each line says
+   where to get the value).
+2. Run `backend/pfeenv/bin/python deploy/setup_free.py` (or `--check` first).
+   It migrates the database, sends a test email, sets the API's settings on
+   Render, redeploys the API and website, schedules the nightly trigger
+   (every 10 minutes between 02:00 and 03:50 UTC, which also keeps the free
+   instance awake while the job runs) and runs it once. Re-running is safe.
+
+Upgrade path when a card works: Render Starter for the API (no sleeping),
+a Render cron job instead of cron-job.org, a domain + Resend for email.
+
 ## 0. Push first
 
 The commits are ready locally but not pushed — this machine has no GitHub
