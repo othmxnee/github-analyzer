@@ -349,6 +349,7 @@ export default function Home() {
           <li><button onClick={() => scrollTo('hp-roles')}>Developer roles</button></li>
           <li><button onClick={() => scrollTo('hp-how')}>How it works</button></li>
           <li><button onClick={() => scrollTo('hp-metrics')}>Metrics</button></li>
+          {auth.authenticated && <li><button onClick={() => navigate('/portfolio')}>My repositories</button></li>}
         </ul>
         <div className="hp-nav-right">
           <AuthButton auth={auth} />
