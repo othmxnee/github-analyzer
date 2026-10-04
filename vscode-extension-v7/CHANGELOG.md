@@ -1,5 +1,10 @@
 # Change Log
 
+## [2.0.1]
+
+- Renamed the extension to **Git Analyzer**.
+- New Marketplace page: rewritten description, screenshots, gallery banner.
+
 ## [2.0.0]
 
 The extension now runs the website's own engine and dashboard instead of its

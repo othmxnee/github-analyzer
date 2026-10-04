@@ -1,14 +1,15 @@
 {
   "name": "github-analyzer",
-  "displayName": "GitHub Analyzer",
-  "description": "Knowledge risk, bus factor, hotspots and developer roles for your local Git repositories. Same dashboard and engine as the website, fully offline.",
-  "version": "2.0.0",
+  "displayName": "Git Analyzer",
+  "description": "Find bus-factor and knowledge-loss risk in your Git repositories: ownership, orphaned code, hotspots, architecture and developer roles. 100% local.",
+  "version": "2.0.1",
   "publisher": "othmxnee",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/othmxnee/github-analyzer.git"
+    "url": "https://github.com/othmxnee/github-analyzer.git",
+    "directory": "vscode-extension-v7"
   },
   "bugs": {
     "url": "https://github.com/othmxnee/github-analyzer/issues"
@@ -20,7 +21,11 @@
     "code ownership",
     "knowledge risk",
     "developer roles",
-    "hotspots"
+    "hotspots",
+    "code churn",
+    "technical debt",
+    "repository analytics",
+    "team health"
   ],
   "engines": {
     "vscode": "^1.85.0"
@@ -39,37 +44,37 @@
       {
         "command": "githubAnalyzer.analyze",
         "title": "Analyze Repository",
-        "category": "GitHub Analyzer",
+        "category": "Git Analyzer",
         "icon": "$(play)"
       },
       {
         "command": "githubAnalyzer.openDashboard",
         "title": "Open Dashboard",
-        "category": "GitHub Analyzer",
+        "category": "Git Analyzer",
         "icon": "$(graph)"
       },
       {
         "command": "githubAnalyzer.refresh",
         "title": "Re-analyze",
-        "category": "GitHub Analyzer",
+        "category": "Git Analyzer",
         "icon": "$(refresh)"
       },
       {
         "command": "githubAnalyzer.setupEngine",
         "title": "Set Up Analysis Engine",
-        "category": "GitHub Analyzer"
+        "category": "Git Analyzer"
       },
       {
         "command": "githubAnalyzer.showLog",
         "title": "Show Engine Log",
-        "category": "GitHub Analyzer"
+        "category": "Git Analyzer"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "githubAnalyzer",
-          "title": "GitHub Analyzer",
+          "title": "Git Analyzer",
           "icon": "$(git-commit)"
         }
       ]
@@ -110,7 +115,7 @@
       ]
     },
     "configuration": {
-      "title": "GitHub Analyzer",
+      "title": "Git Analyzer",
       "properties": {
         "githubAnalyzer.pythonPath": {
           "type": "string",
@@ -120,7 +125,7 @@
         "githubAnalyzer.enginePath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Optional path to a frozen engine binary (`analyzer_bridge`), for example the one inside the GitHub Analyzer desktop app. When set, no Python is needed."
+          "markdownDescription": "Optional path to a frozen engine binary (`analyzer_bridge`), for example the one inside the Git Analyzer desktop app. When set, no Python is needed."
         }
       }
     }
@@ -129,5 +134,9 @@
     "prepare-assets": "node scripts/prepare.js",
     "vscode:prepublish": "node scripts/prepare.js",
     "package": "npx --yes @vscode/vsce package"
+  },
+  "galleryBanner": {
+    "color": "#07090F",
+    "theme": "dark"
   }
 }

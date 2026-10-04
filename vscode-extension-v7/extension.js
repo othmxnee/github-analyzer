@@ -1,6 +1,6 @@
 'use strict';
 /*
- * GitHub Analyzer for VS Code (v2 architecture).
+ * Git Analyzer for VS Code (v2 architecture).
  *
  * - Dashboard: the website's React app (webview/, built in embed mode).
  * - Engine:    the website's backend (engine-src/bridge.py), one long-lived
@@ -119,7 +119,7 @@ async function setupEngine() {
   const base = await findBasePython();
   if (!base) {
     const pick = await vscode.window.showErrorMessage(
-      'GitHub Analyzer needs Python 3.11 or newer to run its analysis engine.',
+      'Git Analyzer needs Python 3.11 or newer to run its analysis engine.',
       'Download Python', 'Set Python path');
     if (pick === 'Download Python') vscode.env.openExternal(vscode.Uri.parse('https://www.python.org/downloads/'));
     if (pick === 'Set Python path') vscode.commands.executeCommand('workbench.action.openSettings', 'githubAnalyzer.pythonPath');
@@ -127,13 +127,13 @@ async function setupEngine() {
   }
   return vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
-    title: 'GitHub Analyzer: setting up the analysis engine (one time)',
+    title: 'Git Analyzer: setting up the analysis engine (one time)',
     cancellable: false,
   }, async (progress) => {
     fs.mkdirSync(ctx.globalStorageUri.fsPath, { recursive: true });
     progress.report({ message: 'creating a private Python environment…' });
     let r = await run(base, ['-m', 'venv', venvDir()], { timeout: 300000 });
-    if (!r.ok) { out.appendLine(r.stderr); vscode.window.showErrorMessage('Could not create the engine environment. See Output → GitHub Analyzer.'); return false; }
+    if (!r.ok) { out.appendLine(r.stderr); vscode.window.showErrorMessage('Could not create the engine environment. See Output → Git Analyzer.'); return false; }
     progress.report({ message: 'installing packages (a few minutes, needs internet)…' });
     r = await run(venvPython(), ['-m', 'pip', 'install', '--disable-pip-version-check', '-r',
       path.join(ctx.extensionPath, 'engine-src', 'requirements.txt')], { timeout: 30 * 60 * 1000 });
@@ -141,10 +141,10 @@ async function setupEngine() {
     if (!r.ok) {
       out.appendLine(r.stderr.slice(-4000));
       out.show(true);
-      vscode.window.showErrorMessage('Installing the engine packages failed. See Output → GitHub Analyzer.');
+      vscode.window.showErrorMessage('Installing the engine packages failed. See Output → Git Analyzer.');
       return false;
     }
-    vscode.window.showInformationMessage('GitHub Analyzer: analysis engine ready.');
+    vscode.window.showInformationMessage('Git Analyzer: analysis engine ready.');
     return true;
   });
 }
@@ -155,7 +155,7 @@ async function ensureEngine() {
   let cmd = await resolveEngineCommand();
   if (!cmd) {
     const pick = await vscode.window.showInformationMessage(
-      'GitHub Analyzer runs its analysis locally with Python. Install its packages into a private environment now? (one time: about 200 MB download, 600 MB on disk)',
+      'Git Analyzer runs its analysis locally with Python. Install its packages into a private environment now? (one time: about 200 MB download, 600 MB on disk)',
       { modal: false }, 'Set up engine', 'Use my own Python');
     if (pick === 'Use my own Python') {
       vscode.commands.executeCommand('workbench.action.openSettings', 'githubAnalyzer.pythonPath');
@@ -281,7 +281,7 @@ async function handleMessage(msg, pendingCtx) {
     switch (op) {
       case 'request': {
         const eng = await ensureEngine();
-        if (!eng) return reply({ status: 503, body: { error: 'The analysis engine is not set up. Run “GitHub Analyzer: Set Up Analysis Engine”.' } });
+        if (!eng) return reply({ status: 503, body: { error: 'The analysis engine is not set up. Run “Git Analyzer: Set Up Analysis Engine”.' } });
         const res = await eng.call(payload || {});
         noteResponse(payload || {}, res);
         return reply(res);
@@ -340,7 +340,7 @@ async function showDashboard({ analyze = false, force = false, repoPath = null }
     return;
   }
   const pendingCtx = { autoStart: analyze, force, repoPath: target };
-  panel = vscode.window.createWebviewPanel('githubAnalyzerDashboard', 'GitHub Analyzer', vscode.ViewColumn.One, {
+  panel = vscode.window.createWebviewPanel('githubAnalyzerDashboard', 'Git Analyzer', vscode.ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: true,
     localResourceRoots: [vscode.Uri.joinPath(ctx.extensionUri, 'webview')],
@@ -357,7 +357,7 @@ async function showDashboard({ analyze = false, force = false, repoPath = null }
 // ── activation ──────────────────────────────────────────────────────────────
 function activate(context) {
   ctx = context;
-  out = vscode.window.createOutputChannel('GitHub Analyzer');
+  out = vscode.window.createOutputChannel('Git Analyzer');
   context.subscriptions.push(out);
 
   views.summary = new SummaryProvider();
@@ -371,7 +371,7 @@ function activate(context) {
 
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   statusItem.command = 'githubAnalyzer.openDashboard';
-  statusItem.tooltip = 'Open the GitHub Analyzer dashboard';
+  statusItem.tooltip = 'Open the Git Analyzer dashboard';
   context.subscriptions.push(statusItem);
 
   context.subscriptions.push(
