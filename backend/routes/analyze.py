@@ -73,11 +73,24 @@ def _session_token(repo_url):
     return session.get(f'{provider}_token') if provider else None
 
 
+def _owns_through_app(repo_url):
+    """The signed-in user installed the GitHub App on this repository's account."""
+    login = (session.get('github_user') or {}).get('login')
+    if not login or not store.enabled():
+        return False
+    try:
+        from services import github_app
+        return github_app.user_owns_repo(login, repo_url)
+    except Exception:
+        return False
+
+
 def _forbidden(repo_url):
     """403 response when repo_url is private and this visitor cannot read it, else None."""
     if LOCAL_MODE or not repo_url or _local_path(repo_url):
         return None
-    if analyzer_service.is_private(repo_url) and not access.can_read(repo_url, _session_token(repo_url)):
+    if analyzer_service.is_private(repo_url) and not access.can_read(repo_url, _session_token(repo_url)) \
+            and not _owns_through_app(repo_url):
         return jsonify({'error': 'This repository is private. Sign in with an account that can read it.'}), 403
     return None
 
@@ -113,6 +126,12 @@ def analyze():
         if denied:
             return denied
         private = access.is_private_repo(repo_url, token) if token else None
+        if store.enabled() and _owns_through_app(repo_url):
+            # Clone with the GitHub App's read-only installation token.
+            from services import github_app
+            iid = github_app.installation_for_repo(repo_url)
+            if iid:
+                token, provider, private = github_app.installation_token(iid), 'github-app', True
         return jsonify(start_analysis(repo_url, force=force, token=token, provider=provider,
                                       private=private))
     except Exception as e:

@@ -23,6 +23,15 @@ Everything below runs on free tiers that need no payment card:
    (every 10 minutes between 02:00 and 03:50 UTC, which also keeps the free
    instance awake while the job runs) and runs it once. Re-running is safe.
 
+**GitHub App (private repositories).** Set `ADMIN_GITHUB_LOGIN` on the API to
+your GitHub login, sign in on the website, open *My repositories* and click
+*Create the GitHub App* (once). GitHub creates it from a manifest (read-only
+Contents + Metadata, webhook to `/github-app/webhook`); its credentials are
+stored in the database. Anyone can then *Connect private repositories*: the
+installed repositories appear in their *My repositories*, are re-checked
+nightly with short-lived installation tokens, and only installation owners
+or people with GitHub access can see their results.
+
 Upgrade path when a card works: Render Starter for the API (no sleeping),
 a Render cron job instead of cron-job.org, a domain + Resend for email.
 

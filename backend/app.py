@@ -17,6 +17,7 @@ from routes.auth import auth_bp
 from routes.watch import watch_bp
 from routes.portfolio import portfolio_bp
 from routes.jobs import jobs_bp
+from routes.github_app import github_app_bp
 from services.skill_service import warm_up_umap
 
 IS_PRODUCTION = os.environ.get('FLASK_ENV') == 'production'
@@ -54,6 +55,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(watch_bp)
 app.register_blueprint(portfolio_bp)
 app.register_blueprint(jobs_bp)
+app.register_blueprint(github_app_bp)
 
 # Optional persistence: with DATABASE_URL set, bind and migrate at start-up.
 # A failed migration stops the boot on purpose (a deploy should fail loudly,

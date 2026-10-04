@@ -32,3 +32,8 @@
 .pf-chips { display: flex; flex-wrap: wrap; gap: 6px; white-space: normal; }
 .pf-chip { font-family: var(--mono); font-size: var(--fs-micro); color: var(--t2); background: var(--surf); border: 1px solid var(--b); border-radius: var(--rpill); padding: 2px 8px; }
 .pf-chip.critical { color: var(--red); background: var(--red-d); border-color: var(--risk-danger-border); }
+
+.pf-connect { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.pf-connect p { margin: 0; line-height: 1.6; }
+.pf-notice { font-size: var(--fs-xs); color: var(--green); background: var(--green-d); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+.pf-notice.warn { color: var(--amber); background: var(--amber-d); }

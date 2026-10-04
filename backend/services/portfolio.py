@@ -26,10 +26,17 @@ def _latest_two(s, repository_id):
 
 
 def _watched(s, provider, login):
-    from models import Repository, Watch
-    return (s.query(Repository).join(Watch, Watch.repository_id == Repository.id)
-            .filter(Watch.provider == provider, Watch.login == login, Watch.active.is_(True))
-            .distinct().order_by(Repository.url).all())
+    """Repositories the user watches, plus (GitHub) those of their app installations."""
+    from models import Installation, Repository, Watch
+    repos = {r.id: r for r in (s.query(Repository).join(Watch, Watch.repository_id == Repository.id)
+                               .filter(Watch.provider == provider, Watch.login == login,
+                                       Watch.active.is_(True)).all())}
+    if provider == 'github':
+        for r in (s.query(Repository)
+                  .join(Installation, Installation.installation_id == Repository.installation_id)
+                  .filter(Installation.owner_login == login, Installation.active.is_(True)).all()):
+            repos[r.id] = r
+    return sorted(repos.values(), key=lambda r: r.url)
 
 
 def repositories(provider, login):

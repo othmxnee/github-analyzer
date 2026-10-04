@@ -66,9 +66,10 @@ def create_watch():
         return jsonify({'error': 'Use a Slack incoming-webhook URL (https://hooks.slack.com/services/...).'}), 400
     if watches.count_for_owner(provider, login) >= watches.MAX_WATCHES_PER_USER:
         return jsonify({'error': f'You can watch up to {watches.MAX_WATCHES_PER_USER} repositories.'}), 400
-    if not _publicly_readable(repo_url):
-        return jsonify({'error': 'Nightly alerts work for public repositories for now. '
-                                 'Private repositories need the Git Analyzer GitHub App (coming soon).'}), 400
+    from routes.analyze import _owns_through_app
+    if not _publicly_readable(repo_url) and not _owns_through_app(repo_url):
+        return jsonify({'error': 'To watch a private repository, install the Git Analyzer GitHub App on its '
+                                 'account (My repositories → Connect private repositories).'}), 400
 
     watch_id, token = watches.create(repo_url, provider, login, email=email, slack_webhook_url=slack)
     if email:

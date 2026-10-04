@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { API_URL, getPortfolio, getPortfolioPeople } from '../services/api'
+import { API_URL, getGitHubAppStatus, getPortfolio, getPortfolioPeople } from '../services/api'
 import '../styles/Portfolio.css'
 
 /* Company-wide view: every repository the signed-in user watches, riskiest
@@ -16,6 +16,39 @@ function Change({ value, invert = false }) {
   return <span className={`pf-change ${worse ? 'worse' : 'better'}`}>{value > 0 ? '+' : ''}{value}</span>
 }
 
+/* Private repositories through the GitHub App (read-only, installed per
+   GitHub account or organization). */
+function ConnectPrivate({ app }) {
+  const params = new URLSearchParams(window.location.search)
+  const installed = params.get('installed')
+  const notice = !installed ? null
+    : installed === 'forbidden' ? { warn: true, text: 'That installation belongs to an account you cannot access.' }
+    : installed === 'error' || installed === 'invalid' ? { warn: true, text: 'Connecting the installation failed. Try again from GitHub.' }
+    : { text: `Connected ${installed}: ${params.get('repos') || 0} repositories. They are re-checked every night; open one to analyze it now.` }
+  if (!app || !app.enabled || (!app.configured && !app.is_admin)) return notice ? <div className="pf-card pf-notice">{notice.text}</div> : null
+  return (
+    <section className="pf-card">
+      {notice && <div className={`pf-notice${notice.warn ? ' warn' : ''}`}>{notice.text}</div>}
+      <div className="pf-card-title">Private repositories <span className="pf-muted">read-only access through the Git Analyzer GitHub App</span></div>
+      {app.configured ? (
+        <div className="pf-connect">
+          <p className="pf-muted">Install the app on your GitHub account or organization and choose the repositories.
+            They appear here, are re-checked every night, and only people with access can see their results.</p>
+          <a className="pf-btn" href={app.install_url}>Connect private repositories</a>
+          {app.installations?.length > 0 && (
+            <p className="pf-muted">Connected: {app.installations.map(i => `${i.account}${i.type === 'Organization' ? ' (organization)' : ''}`).join(', ')}</p>
+          )}
+        </div>
+      ) : (
+        <div className="pf-connect">
+          <p className="pf-muted">The GitHub App doesn't exist yet. Create it once (you're the administrator); GitHub will ask you to confirm.</p>
+          <a className="pf-btn" href={`${API_URL}/github-app/setup`}>Create the GitHub App</a>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function healthClass(h) {
   if (h == null) return ''
   if (h < 40) return 'bad'
@@ -28,8 +61,10 @@ export default function Portfolio() {
   const [people, setPeople] = useState([])
   const [state, setState] = useState('loading')   // loading | signin | disabled | ready | error
   const [error, setError] = useState('')
+  const [app, setApp] = useState(null)
 
   useEffect(() => {
+    getGitHubAppStatus().then(setApp).catch(() => {})
     getPortfolio()
       .then(d => {
         if (!d.enabled) { setState('disabled'); return }
@@ -61,6 +96,8 @@ export default function Portfolio() {
         )}
         {state === 'disabled' && <div className="pf-card pf-empty"><p>This server keeps no history, so there is nothing to show here.</p></div>}
         {state === 'error' && <div className="pf-card pf-empty pf-err">{error}</div>}
+
+        {state === 'ready' && <ConnectPrivate app={app} />}
 
         {state === 'ready' && repos.length === 0 && (
           <div className="pf-card pf-empty">

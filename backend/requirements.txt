@@ -16,3 +16,4 @@ umap-learn==0.5.12
 SQLAlchemy==2.0.54
 alembic==1.20.0
 psycopg[binary]==3.3.6
+PyJWT[crypto]==2.15.1

@@ -55,14 +55,28 @@ def run(force=False, resolve_source=None):
         db.init_from_env()
     summary = {"checked": 0, "unchanged": 0, "analyzed": 0, "failed": 0, "skipped_private": 0,
                "alerts": 0, "emails": 0, "slack": 0}
-    for repo in watches.watched_repositories():
+    for repo in watches.nightly_repositories():
         url = repo["url"]
         summary["checked"] += 1
-        if repo["private"]:
-            summary["skipped_private"] += 1          # needs the GitHub App's credentials
-            continue
+        token = provider = None
+        if repo["private"] or repo.get("installation_id"):
+            if not repo.get("installation_id"):
+                summary["skipped_private"] += 1      # private and no GitHub App installation
+                continue
+            try:
+                from services import github_app
+                token, provider = github_app.installation_token(repo["installation_id"]), "github-app"
+            except Exception:
+                logger.exception("%s: could not get an installation token", url)
+                summary["failed"] += 1
+                continue
         source = resolve_source(url) if resolve_source else None
-        head = remote_head(source or url)
+        if source:
+            head = remote_head(source)
+        elif token:
+            head = remote_head(url.replace("https://", f"https://x-access-token:{token}@", 1))
+        else:
+            head = remote_head(url)
         if head is None:
             logger.warning("%s: cannot read the remote HEAD, skipping", url)
             summary["failed"] += 1
@@ -73,7 +87,8 @@ def run(force=False, resolve_source=None):
 
         t0 = time.time()
         _forget(url)
-        analyzer._run_analysis(url, local_path=source, trigger="scheduled")   # synchronous
+        analyzer._run_analysis(url, token=token, provider=provider, local_path=source,
+                               trigger="scheduled", private=repo["private"] or None)   # synchronous
         if analyzer._ANALYSIS_STATUS.get(url) != "done":
             logger.error("%s: analysis failed: %s", url, (analyzer._ANALYSIS_CACHE.get(url) or {}).get("error"))
             summary["failed"] += 1

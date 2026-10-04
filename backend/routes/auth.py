@@ -211,6 +211,11 @@ def oauth_callback(provider):
 
         session[_token_key(provider)] = token
         session[_user_key(provider)] = user
+        # Return to a page that asked for sign-in first (e.g. linking a GitHub
+        # App installation), but only to our own front or back end.
+        after = session.pop('after_login', None)
+        if after and (after.startswith(BACKEND_URL + '/') or after.startswith(FRONTEND_URL + '/')):
+            return redirect(after)
         return redirect(FRONTEND_URL)
     except Exception as exc:
         logger.error('%s OAuth callback failed: %s\n%s', provider, exc, traceback.format_exc())

@@ -96,6 +96,8 @@ def _build_clone_url(repo_url: str, token: str, provider: str) -> str:
         userinfo = f'oauth2:{token}'
     elif provider == 'bitbucket':
         userinfo = f'x-token-auth:{token}'
+    elif provider == 'github-app':          # GitHub App installation token
+        userinfo = f'x-access-token:{token}'
     else:  # github (and default)
         userinfo = token
     return repo_url.replace('https://', f'https://{userinfo}@', 1)

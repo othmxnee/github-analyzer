@@ -140,6 +140,23 @@ def watched_repositories():
                 for r in q.all()]
 
 
+def nightly_repositories():
+    """What the nightly job re-checks: every watched repository, plus every
+    repository of an active GitHub App installation (installing the app is
+    the opt-in; alerts still go only to watchers)."""
+    import db
+    from models import Installation, Repository
+    by_id = {r["id"]: dict(r, installation_id=None) for r in watched_repositories()}
+    with db.session() as s:
+        rows = (s.query(Repository.id, Repository.url, Repository.private, Repository.last_head_sha,
+                        Repository.installation_id)
+                .join(Installation, Installation.installation_id == Repository.installation_id)
+                .filter(Installation.active.is_(True)).all())
+        for rid, url, private, head, iid in rows:
+            by_id[rid] = {"id": rid, "url": url, "private": private, "last_head_sha": head, "installation_id": iid}
+    return [by_id[k] for k in sorted(by_id)]
+
+
 def _deliverable(s, repository_id):
     from models import Watch
     return (s.query(Watch).filter_by(repository_id=repository_id, active=True)

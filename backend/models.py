@@ -7,8 +7,8 @@ back whole.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary,
-                        String, Text)
+from sqlalchemy import (BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer,
+                        LargeBinary, String, Text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import Base
@@ -31,6 +31,9 @@ class Repository(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     last_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_head_sha: Mapped[str | None] = mapped_column(String(64))
+    # Set when the repository comes from a GitHub App installation: nightly
+    # re-checks then clone it with that installation's short-lived token.
+    installation_id: Mapped[int | None] = mapped_column(BigInteger)
 
     runs: Mapped[list["AnalysisRun"]] = relationship(back_populates="repository",
                                                      cascade="all, delete-orphan")
@@ -104,4 +107,31 @@ class Alert(Base):
     severity: Mapped[str] = mapped_column(String(8), nullable=False)     # high | medium
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class GitHubApp(Base):
+    """The Git Analyzer GitHub App's credentials (one row), created by the
+    manifest flow at /github-app/setup. Env vars GITHUB_APP_* override it."""
+    __tablename__ = "github_app"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    app_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    slug: Mapped[str] = mapped_column(String(200), nullable=False)
+    html_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    private_key: Mapped[str] = mapped_column(Text, nullable=False)
+    webhook_secret: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class Installation(Base):
+    """A GitHub account or organization that installed the app."""
+    __tablename__ = "installations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    account_login: Mapped[str] = mapped_column(String(200), nullable=False)
+    account_type: Mapped[str | None] = mapped_column(String(20))      # User | Organization
+    owner_login: Mapped[str | None] = mapped_column(String(200), index=True)  # our signed-in user who installed it
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
