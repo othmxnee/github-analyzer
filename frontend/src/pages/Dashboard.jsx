@@ -46,7 +46,7 @@ import {
   startAvatarJob, getAvatarResult, pollDelay, wait,
 } from '../services/api'
 import { loadResults, clearResults } from '../services/resultStore'
-import { isEmbedded, isLocalKey, repoLabel } from '../services/host'
+import { isEmbedded, isLocalKey, repoLabel, setCurrentRepo } from '../services/host'
 import '../styles/Dashboard.css'
 import '../styles/Timeline.css'
 
@@ -354,6 +354,8 @@ export default function Dashboard() {
     return () => { cancelled = true }
   }, [navigate])
 
+  useEffect(() => { setCurrentRepo(repoUrl) }, [repoUrl])   // lets file names open the file
+
   /* ── fetch skills (lazy: starts when user first visits "Developer Roles" or
      "Developers", then keeps polling in the background until the job finishes —
      independent of which tab is currently open, so the result never gets stuck
@@ -514,7 +516,7 @@ export default function Dashboard() {
         gini={gini}
         busFactor={bus_factor}
       />
-      {!isEmbedded && !isLocalKey(repoUrl) && repoUrl && <RepoHistory repoUrl={repoUrl} Card={ChartCard} />}
+      {repoUrl && (isEmbedded === isLocalKey(repoUrl)) && <RepoHistory repoUrl={repoUrl} Card={ChartCard} embedded={isEmbedded} />}
     </div>
   )
 

@@ -1,5 +1,18 @@
 # Change Log
 
+## [2.1.0]
+
+- **Who knows this file**: the status bar shows the main owners of the file
+  you're editing (share of its current lines); hover for the full list.
+- **Explorer badges**: `!` on high-risk files (widely imported, known by few),
+  `○` on files owned by people who stopped contributing. Setting:
+  `githubAnalyzer.explorerBadges`.
+- **Click a file name** in the dashboard (charts, tables, "See all" lists)
+  to open it beside the dashboard.
+- **History**: every analyzed commit is saved locally; the overview shows the
+  trend of health and bus factor across commits.
+- The last results are restored when VS Code starts, before any new analysis.
+
 ## [2.0.1]
 
 - Renamed the extension to **Git Analyzer**.

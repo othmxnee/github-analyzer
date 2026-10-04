@@ -1,3 +1,4 @@
+import { canOpenFiles, openFile } from '../../services/host'
 /* Files whose dominant author is no longer active — "knowledge already lost".
    Each row: the file, who owns it, how much, and how long they've been gone. */
 
@@ -26,7 +27,11 @@ export default function OrphanedFilesTable({ data }) {
         <tbody>
           {rows.slice(0, 10).map((r, i) => (
             <tr key={i} style={{ borderBottom: '1px solid var(--color-border, #1e1e1e)' }}>
-              <td style={{ padding: '8px 6px', fontFamily: 'var(--mono)' }} title={r.file}>{tail(r.file)}</td>
+              <td style={{ padding: '8px 6px', fontFamily: 'var(--mono)' }} title={r.file}>
+                {canOpenFiles()
+                  ? <button className="mdm-filelink" onClick={() => openFile(r.file)}>{tail(r.file)}</button>
+                  : tail(r.file)}
+              </td>
               <td style={{ padding: '8px 6px' }} title={r.last_active ? `last commit ${r.last_active}` : ''}>{shortDev(r.owner)}</td>
               <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--red)', fontWeight: 600 }}>
                 {Math.round((r.ownership ?? 0) * 100)}%

@@ -51,3 +51,24 @@ export async function saveFile(fileName, mime, data) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
   return true
 }
+
+/* ── Open a repository file from the dashboard (desktop app / VS Code) ── */
+let currentRepo = null
+export const setCurrentRepo = (key) => { currentRepo = key }
+export const canOpenFiles = () => !!(host?.openFile && isLocalKey(currentRepo))
+export function openFile(file) {
+  if (!canOpenFiles() || !file) return
+  host.openFile({ repoPath: currentRepo.slice(LOCAL_PREFIX.length), file })
+}
+/* Spread into a Chart.js options object whose bars are files: a click on a
+   bar opens that file, and the cursor shows it is clickable. */
+export function fileClickChartOptions(paths) {
+  if (!canOpenFiles()) return {}
+  return {
+    onClick: (_evt, els) => { if (els?.length) openFile(paths[els[0].index]) },
+    onHover: (evt, els) => {
+      const t = evt?.native?.target
+      if (t) t.style.cursor = els?.length ? 'pointer' : 'default'
+    },
+  }
+}

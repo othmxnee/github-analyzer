@@ -332,12 +332,16 @@ def history():
     """
     try:
         repo_url = request.args.get('repo_url')
-        if not repo_url or not _validate_repo_url(repo_url) or _local_path(repo_url):
+        if not repo_url or not _validate_repo_url(repo_url):
             return jsonify({'error': 'Invalid repository URL.'}), 400
+        limit = max(1, min(int(request.args.get('limit', 60)), 365))
+        if _local_path(repo_url):
+            from services import local_history
+            return jsonify({'repo_url': repo_url, 'enabled': local_history.enabled(), 'local': True,
+                            'runs': local_history.history(repo_url, limit=limit)})
         denied = _forbidden(repo_url)
         if denied:
             return denied
-        limit = max(1, min(int(request.args.get('limit', 60)), 365))
         return jsonify({'repo_url': repo_url, 'enabled': store.enabled(),
                         'runs': store.history(repo_url, limit=limit)})
     except Exception as e:

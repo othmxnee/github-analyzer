@@ -1,4 +1,5 @@
 import { Bar } from 'react-chartjs-2'
+import { fileClickChartOptions } from '../../services/host'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -35,6 +36,7 @@ function RiskTable({ data }) {
   }
 
   const options = {
+    ...fileClickChartOptions(fullPaths),
     responsive: true,
     maintainAspectRatio: false,
     plugins: {

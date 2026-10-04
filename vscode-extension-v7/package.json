@@ -2,7 +2,7 @@
   "name": "github-analyzer",
   "displayName": "Git Analyzer",
   "description": "Find bus-factor and knowledge-loss risk in your Git repositories: ownership, orphaned code, hotspots, architecture and developer roles. 100% local.",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "publisher": "othmxnee",
   "license": "MIT",
   "icon": "icon.png",
@@ -36,7 +36,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:githubAnalyzer.summary"
+    "onView:githubAnalyzer.summary",
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -75,7 +76,7 @@
         {
           "id": "githubAnalyzer",
           "title": "Git Analyzer",
-          "icon": "$(git-commit)"
+          "icon": "media/activity-icon.svg"
         }
       ]
     },
@@ -126,6 +127,11 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Optional path to a frozen engine binary (`analyzer_bridge`), for example the one inside the Git Analyzer desktop app. When set, no Python is needed."
+        },
+        "githubAnalyzer.explorerBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Mark files in the Explorer from the last analysis: `!` high knowledge risk (widely imported, known by few), `\u25cb` owned by people who stopped contributing."
         }
       }
     }

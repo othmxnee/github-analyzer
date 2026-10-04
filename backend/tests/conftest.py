@@ -17,7 +17,7 @@ from make_repo import GIT_ENV, build  # noqa: E402
 os.environ.update(GIT_ENV)
 
 # Values that depend on the wall clock, not on the repository.
-VOLATILE_KEYS = {"compare_window", "window", "analyzed_at"}
+VOLATILE_KEYS = {"compare_window", "window", "analyzed_at", "last_commit_days_ago"}  # relative to today
 # 2-D projections: tiny float differences across BLAS/numba builds are fine.
 LOOSE_KEYS = {"pca_x", "pca_y", "umap_x", "umap_y"}
 

@@ -172,3 +172,7 @@
   color: var(--t3);
   font-style: italic;
 }
+
+/* File names that open the file (desktop app / VS Code). */
+.mdm-filelink { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; }
+.mdm-filelink:hover { color: var(--ac); }

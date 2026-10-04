@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import '../styles/MetricDetailModal.css'
-import { saveFile } from '../services/host'
+import { canOpenFiles, openFile, saveFile } from '../services/host'
 
 /* ─────────────────────────────────────────────────────────────────────
    MetricDetailModal
@@ -197,7 +197,9 @@ export default function MetricDetailModal({ detail, onClose }) {
                             className={`mdm-td${c.align === 'right' ? ' right' : ''}${c.mono ? ' mono' : ''}`}
                             title={c.mono ? String(raw ?? '') : undefined}
                           >
-                            {c.render ? c.render(raw, r) : raw}
+                            {c.key === 'file' && canOpenFiles()
+                              ? <button className="mdm-filelink" title="Open file" onClick={() => openFile(r.file)}>{c.render ? c.render(raw, r) : raw}</button>
+                              : (c.render ? c.render(raw, r) : raw)}
                           </div>
                         )
                       })}

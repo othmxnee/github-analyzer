@@ -122,7 +122,7 @@ export default function LocalHome() {
             : <div className="lh-empty">
                 {ctx.kind === 'vscode'
                   ? 'Open a folder that contains a Git repository.'
-                  : 'Choose a folder that contains a Git repository.'}
+                  : 'Choose a folder that contains a Git repository, or drop it on this window.'}
               </div>}
 
           {running ? (

@@ -14,7 +14,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const { EngineClient } = require('./engine-client');
+const { EngineClient, resolveRepoFile } = require('./engine-client');
+const { Insights } = require('./insights');
 const { SummaryProvider, DevelopersProvider, RisksProvider } = require('./sidebar');
 
 const IS_WIN = process.platform === 'win32';
@@ -30,6 +31,7 @@ let enginePython = null;
 let panel = null;
 let idleTimer = null;
 let statusItem;
+let insights;
 const views = {};
 const state = { lastResult: null, lastSkills: null, repoPath: null, routes: [], errors: [] };
 
@@ -218,6 +220,7 @@ function bootstrapScript() {
     pickRepository: () => call('pick'),
     rememberRepository: (p) => call('remember', p),
     saveFile: (f) => call('save', f),
+    openFile: (req) => call('openFile', req),
     on: (event, cb) => {
       const list = listeners.get(event) || []; list.push(cb); listeners.set(event, list);
       return () => listeners.set(event, (listeners.get(event) || []).filter(x => x !== cb));
@@ -241,7 +244,7 @@ function webviewHtml(webview) {
     `connect-src ${src}`,
   ].join('; ');
   let html = fs.readFileSync(path.join(webDir.fsPath, 'index.html'), 'utf8');
-  html = html.replace(/<link rel="icon"[^>]*>\s*/i, '');
+  html = html.replace(/<link rel="(icon|apple-touch-icon)"[^>]*>\s*/gi, '');
   html = html.replace(/(src|href)="\.\/assets\//g, `$1="${base}assets/`);
   html = html.replace(/<script type="module"/g, `<script type="module" nonce="${nonce}"`);
   html = html.replace('<head>', `<head>
@@ -263,6 +266,7 @@ function noteResponse(req, res) {
   if (req.path === '/analyze/result') {
     state.lastResult = res.body;
     state.repoPath = repoPath;
+    insights.update(repoPath, res.body, state.lastSkills);
     for (const v of Object.values(views)) v.update({ result: res.body, repoName: repoName(repoPath) });
     const ps = res.body.project_summary || {};
     statusItem.text = `$(pulse) ${repoName(repoPath)}: health ${ps.health_score ?? '—'} · bus factor ${res.body.bus_factor ?? '—'}`;
@@ -270,6 +274,7 @@ function noteResponse(req, res) {
   } else if (req.path === '/analyze/skills/result') {
     state.lastSkills = res.body;
     views.developers.update({ skills: res.body });
+    insights.update(repoPath, null, res.body);
   }
 }
 
@@ -301,6 +306,15 @@ async function handleMessage(msg, pendingCtx) {
         const root = await gitRoot(res[0].fsPath);
         if (!root) vscode.window.showWarningMessage('That folder is not inside a Git repository.');
         return reply(root);
+      }
+      case 'openFile': {
+        const abs = resolveRepoFile(payload && payload.repoPath, payload && payload.file);
+        if (!abs) {
+          vscode.window.showWarningMessage(`File not found in the repository: ${payload && payload.file}`);
+          return reply(false);
+        }
+        await vscode.window.showTextDocument(vscode.Uri.file(abs), { viewColumn: vscode.ViewColumn.Beside, preview: true });
+        return reply(true);
       }
       case 'remember':
         return reply(true);
@@ -374,10 +388,22 @@ function activate(context) {
   statusItem.tooltip = 'Open the Git Analyzer dashboard';
   context.subscriptions.push(statusItem);
 
+  // Owners of the open file, Explorer badges, and the last results restored
+  // from the previous session (no engine start needed for any of this).
+  insights = new Insights(context);
+  const snap = insights.snap;
+  if (snap && snap.result) {
+    state.repoPath = snap.repoPath;
+    for (const v of Object.values(views)) v.update({ result: snap.result, skills: snap.skills, repoName: repoName(snap.repoPath) });
+    const ps = snap.result.project_summary || {};
+    statusItem.text = `$(pulse) ${repoName(snap.repoPath)}: health ${ps.health_score ?? '—'} · bus factor ${snap.result.bus_factor ?? '—'}`;
+    statusItem.show();
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('githubAnalyzer.analyze', () => showDashboard({ analyze: true })),
     vscode.commands.registerCommand('githubAnalyzer.refresh', () => showDashboard({ analyze: true, force: true })),
-    vscode.commands.registerCommand('githubAnalyzer.openDashboard', () => showDashboard({ analyze: !!state.lastResult })),
+    vscode.commands.registerCommand('githubAnalyzer.openDashboard', () => showDashboard({ analyze: !!(state.lastResult || (insights && insights.snap)) })),
     vscode.commands.registerCommand('githubAnalyzer.setupEngine', async () => {
       stopEngine();
       if (await setupEngine()) await ensureEngine();
@@ -390,7 +416,8 @@ function activate(context) {
   );
 
   // Exposed for the integration test only.
-  return { _test: { state, getEnginePython: () => enginePython, isPanelOpen: () => !!panel } };
+  return { _test: { state, insights, getEnginePython: () => enginePython, isPanelOpen: () => !!panel,
+                    openFile: (repoPath, file) => handleMessage({ id: 0, op: 'openFile', payload: { repoPath, file } }, {}) } };
 }
 
 function deactivate() {

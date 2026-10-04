@@ -24,6 +24,20 @@ function App() {
     })
   }, [navigate])
 
+  // Desktop: drop a repository folder anywhere on the window to analyze it.
+  useEffect(() => {
+    if (!host?.dropPath) return undefined
+    const over = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }
+    const drop = (e) => {
+      e.preventDefault()
+      const file = e.dataTransfer?.files?.[0]
+      if (file) host.dropPath(file)
+    }
+    window.addEventListener('dragover', over)
+    window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragover', over); window.removeEventListener('drop', drop) }
+  }, [])
+
   return (
     <div className="app">
       <Suspense fallback={<Loader />}>

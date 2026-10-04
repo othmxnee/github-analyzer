@@ -1,4 +1,5 @@
 import { Bar } from 'react-chartjs-2'
+import { fileClickChartOptions } from '../../services/host'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,6 +32,7 @@ function HotspotFilesChart({ data }) {
   }
 
   const options = {
+    ...fileClickChartOptions(rows.map(d => d.file)),
     responsive: true,
     maintainAspectRatio: false,
     plugins: {

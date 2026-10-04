@@ -28,10 +28,14 @@ and shows where that risk is, how bad it is, and what to do about it.
 | **Knowledge & risk** | Orphaned files with no active owner, ownership percentages, and the share of code held by the active team. |
 | **Hotspots** | The most frequently modified files and a code hotspot map, to spot churn and fragile areas. |
 | **Architecture** | A file dependency graph that highlights central, highly coupled modules. |
-| **Developer roles** | Each developer's role (Backend, Frontend, DevOps, Test, Docs, Mobile, Generalist) inferred from 12 metrics using K-Means clustering. |
+| **Developer roles** | Each developer's role (Backend, Frontend, Full Stack, DevOps, Tester, Mobile, Generalist) inferred from 12 metrics using K-Means clustering. |
 | **Developers** | Per-developer profile: activity over time, risk exposure, top owned files. |
 | **PDF health report** | A shareable report with score, insights and recommendations. |
 | **CSV export** | "See all" tables with search, sorting and CSV export. |
+| **Who knows this file** | The status bar shows the main owners of the file you're editing; hover for the full list. |
+| **Explorer badges** | `!` on high-risk files, `○` on files whose owners stopped contributing. |
+| **Click to open** | Click a file name anywhere in the dashboard to open it beside the dashboard. |
+| **History** | Every analyzed commit is saved locally, with the trend of health and bus factor across commits. |
 | **Time filters** | Date ranges with comparison to the previous period or the previous year. |
 
 ## Screenshots
@@ -82,6 +86,7 @@ Repository*, *Open Dashboard*, *Re-analyze*, *Set Up Analysis Engine*, *Show Eng
 | Setting | Default | Description |
 |---|---|---|
 | `githubAnalyzer.pythonPath` | empty | Python to run the engine with. Empty uses the private environment or `python3`. |
+| `githubAnalyzer.explorerBadges` | `true` | Show `!` / `○` risk badges on files in the Explorer. |
 | `githubAnalyzer.enginePath` | empty | Path to a frozen `analyzer_bridge` engine binary. |
 
 ## Privacy

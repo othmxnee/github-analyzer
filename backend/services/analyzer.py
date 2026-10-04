@@ -181,16 +181,21 @@ def _run_analysis(repo_url: str, token: str = None, provider: str = None, local_
             "kci_data":          internals.get("kci_data", {}),
             "in_degree_data":    internals.get("in_degree_data", {}),
         }
-        _LAST_REPO_URL = repo_url
-        _ANALYSIS_TIMESTAMPS[repo_url] = time.time()
-        _ANALYSIS_STATUS[repo_url] = 'done'
-        _ANALYSIS_PHASE.pop(repo_url, None)
+        # Save before reporting 'done', so whoever sees 'done' also finds the
+        # stored run / history entry.
+        if local_path:
+            from services import local_history
+            local_history.record(repo_url, results, head_sha)
         if run_id:
             from services import skill_service
             store.run_finished(run_id, results, head_sha=head_sha, cleaned={
                 "cleaned": _CLEANED_CACHE[repo_url],
                 "prebuilt": skill_service._commits_cache.get(repo_url),
             })
+        _LAST_REPO_URL = repo_url
+        _ANALYSIS_TIMESTAMPS[repo_url] = time.time()
+        _ANALYSIS_STATUS[repo_url] = 'done'
+        _ANALYSIS_PHASE.pop(repo_url, None)
     except Exception as exc:
         store.run_failed(run_id, exc)
         _ANALYSIS_STATUS[repo_url] = 'error'

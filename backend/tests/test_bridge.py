@@ -77,3 +77,34 @@ def test_bridge_matches_pipeline_and_caches(sample_repo, tmp_path):
         assert b.call(method="GET", path="/analyze/skills/result", query={"repo_url": key})["body"]["status"] == "done"
     finally:
         b.close()
+
+
+@pytest.mark.slow
+def test_bridge_keeps_a_local_history_per_commit(sample_repo, tmp_path):
+    import shutil
+    import subprocess
+    repo = str(tmp_path / "repo")
+    shutil.copytree(sample_repo, repo)
+    key = "local:" + repo
+    b = Bridge(str(tmp_path / "cache"))
+    try:
+        def analyze(force=False):
+            b.call(method="POST", path="/analyze", body={"repo_url": key, "force": force})
+            assert b.wait_done("/analyze/result", key)["status"] == "done"
+            return b.call(method="GET", path="/history", query={"repo_url": key})["body"]
+
+        first = analyze()
+        assert first["enabled"] is True and first["local"] is True and len(first["runs"]) == 1
+        assert analyze(force=True)["runs"][0]["head_sha"] == first["runs"][0]["head_sha"]
+        assert len(analyze(force=True)["runs"]) == 1          # same commit: replaced, not added
+        with open(f"{repo}/README.md", "a") as f:
+            f.write("more\n")
+        subprocess.run(["git", "-C", repo, "commit", "-qam", "docs", "--no-gpg-sign"], check=True,
+                       env={**os.environ, "GIT_AUTHOR_NAME": "Bob", "GIT_AUTHOR_EMAIL": "bob@example.com",
+                            "GIT_COMMITTER_NAME": "Bob", "GIT_COMMITTER_EMAIL": "bob@example.com"})
+        after = analyze()                                      # new HEAD: re-analyzed automatically
+        assert len(after["runs"]) == 2
+        assert after["runs"][0]["head_sha"] != first["runs"][0]["head_sha"]   # newest first
+        assert all(r["bus_factor"] is not None for r in after["runs"])
+    finally:
+        b.close()

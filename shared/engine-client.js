@@ -112,4 +112,29 @@ class EngineClient {
   }
 }
 
-module.exports = { EngineClient };
+/**
+ * Absolute path of a file named in the dashboard, or null. The engine's
+ * ownership lists use normalised keys (a leading "./" or "src/" removed),
+ * so try the path as given, then under src/, then any tracked file ending
+ * with it.
+ */
+function resolveRepoFile(repoPath, file) {
+  const fs = require('fs');
+  const path = require('path');
+  if (!repoPath || !file) return null;
+  const rel = String(file).replace(/^\.\//, '');
+  const root = path.resolve(repoPath);
+  for (const candidate of [rel, path.join('src', rel)]) {
+    const abs = path.resolve(root, candidate);
+    if (abs.startsWith(root + path.sep) && fs.existsSync(abs)) return abs;
+  }
+  try {
+    const out = require('child_process').execFileSync('git', ['-C', root, 'ls-files', '-z'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const hit = out.split('\0').find(f => f === rel || f.endsWith('/' + rel));
+    if (hit) return path.join(root, hit);
+  } catch { /* not a git checkout */ }
+  return null;
+}
+
+module.exports = { EngineClient, resolveRepoFile };

@@ -13,7 +13,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
 /* Stored analyses over time and the alerts they raised. Renders nothing when
    the server keeps no history (no database) or there is nothing to show yet,
    so the dashboard looks exactly as before in that case. */
-export default function RepoHistory({ repoUrl, Card }) {
+export default function RepoHistory({ repoUrl, Card, embedded = false }) {
   const [runs, setRuns] = useState([])
   const [enabled, setEnabled] = useState(false)
   const [alerts, setAlerts] = useState([])
@@ -22,9 +22,9 @@ export default function RepoHistory({ repoUrl, Card }) {
   useEffect(() => {
     let alive = true
     getHistory(repoUrl).then(d => { if (alive) { setRuns(d.runs || []); setEnabled(!!d.enabled) } }).catch(() => {})
-    getAlerts(repoUrl).then(d => { if (alive) setAlerts(d.alerts || []) }).catch(() => {})
+    if (!embedded) getAlerts(repoUrl).then(d => { if (alive) setAlerts(d.alerts || []) }).catch(() => {})
     return () => { alive = false }
-  }, [repoUrl])
+  }, [repoUrl, embedded])
 
   const series = [...runs].reverse()       // oldest -> newest
   const showChart = series.length >= 2
@@ -61,13 +61,20 @@ export default function RepoHistory({ repoUrl, Card }) {
         <Card title="History" sub={series.length ? '1 analysis saved' : 'tracking'}>
           <div className="rh-empty">
             {last && <p>Saved on <b>{last.finished_at.slice(0, 10)}</b>: health <b>{last.health_score}</b>, bus factor <b>{last.bus_factor}</b>.</p>}
-            <p>Click <b>Watch</b> at the top to re-check this repository every night and get an email when it gets riskier.
-               The trend chart appears here from the next analysis.</p>
-            <p><Link to="/portfolio">My repositories</Link> lists everything you watch, with the people who are single points of failure across them.</p>
+            {embedded ? (
+              <p>Each analyzed commit is saved on this computer. Analyze again after new commits
+                 and the trend of health and bus factor appears here.</p>
+            ) : (
+              <>
+                <p>Click <b>Watch</b> at the top to re-check this repository every night and get an email when it gets riskier.
+                   The trend chart appears here from the next analysis.</p>
+                <p><Link to="/portfolio">My repositories</Link> lists everything you watch, with the people who are single points of failure across them.</p>
+              </>
+            )}
           </div>
         </Card>
       )}
-      {alerts.length > 0 ? (
+      {embedded ? null : alerts.length > 0 ? (
         <Card title="Recent alerts" sub={`${alerts.length}`}>
           <ul className="rh-alerts">
             {alerts.slice(0, 8).map(a => (
